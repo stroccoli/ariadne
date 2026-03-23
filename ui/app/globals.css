@@ -1,0 +1,120 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --gold: #D4A24C;
+  --gold-light: #E8B85E;
+  --bg-primary: #0B0F1A;
+  --bg-surface: #141B2D;
+  --bg-input: #1C2438;
+  --text-primary: #E8ECF4;
+  --text-secondary: #6B7A94;
+  --text-muted: #3D4B63;
+  --border: #1E293B;
+  --confidence-high: #34D399;
+  --confidence-mid: #FBBF24;
+  --confidence-low: #F87171;
+  --accent: #6366F1;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: radial-gradient(
+      ellipse at 50% 0%,
+      rgba(212, 162, 76, 0.06) 0%,
+      transparent 50%
+    ),
+    #0B0F1A;
+  color: #E8ECF4;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar — subtle dark */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #1E293B;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3D4B63;
+}
+
+/* Animations */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-gold {
+  0%, 100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes spin-slow {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes grow-width {
+  from {
+    width: 0%;
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.4s ease-out both;
+}
+
+.animate-pulse-gold {
+  animation: pulse-gold 2s ease-in-out infinite;
+}
+
+.animate-spin-slow {
+  animation: spin-slow 1s linear infinite;
+}
+
+.animate-grow-width {
+  animation: grow-width 0.6s ease-out both;
+}
+
+/* Staggered fade-in delays */
+.delay-100 { animation-delay: 100ms; }
+.delay-200 { animation-delay: 200ms; }
+.delay-300 { animation-delay: 300ms; }
+.delay-400 { animation-delay: 400ms; }
+
+/* Textarea focus ring */
+textarea:focus {
+  outline: none;
+  border-color: #D4A24C;
+  box-shadow: 0 0 0 1px rgba(212, 162, 76, 0.3);
+}

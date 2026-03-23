@@ -1,0 +1,63 @@
+export function AriadneIcon({ size = 24 }: { size?: number }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 32 32"
+      width={size}
+      height={size}
+      aria-hidden="true"
+    >
+      {/* Labyrinth arcs */}
+      <path
+        d="M16 4 A12 12 0 0 1 28 16"
+        fill="none"
+        stroke="#1E293B"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M16 4 A12 12 0 0 0 4 16"
+        fill="none"
+        stroke="#1E293B"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M16 9 A7 7 0 0 1 23 16"
+        fill="none"
+        stroke="#1E293B"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M16 9 A7 7 0 0 0 9 16"
+        fill="none"
+        stroke="#1E293B"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      {/* Golden thread */}
+      <path
+        d="M16 2 C16 6, 25 8, 25 16 C25 20, 20 20, 16 20 C12 20, 11 17, 14 15 C17 13, 18 15, 16 16"
+        fill="none"
+        stroke="#D4A24C"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      {/* Center point */}
+      <circle cx="16" cy="16" r="2" fill="#D4A24C" />
+    </svg>
+  );
+}
+
+export default function Logo() {
+  return (
+    <div className="flex items-center gap-3">
+      <AriadneIcon size={28} />
+      <span className="font-display text-2xl font-bold tracking-wide text-primary">
+        Ariadne
+      </span>
+    </div>
+  );
+}
