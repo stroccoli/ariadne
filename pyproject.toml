@@ -1,0 +1,31 @@
+[project]
+name = "ariadne"
+version = "0.1.0"
+description = "AI-powered incident log analyzer"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "google-genai>=1.0.0",
+    "langgraph>=0.2.0",
+    "langsmith>=0.1.0",
+    "openai>=1.30.0",
+    "pydantic>=2.7.0",
+    "python-dotenv>=1.0.1",
+    "qdrant-client>=1.9.1",
+    "requests>=2.31.0",
+    "uvicorn[standard]>=0.30.0",
+]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["ariadne*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "unit: unit tests",
+    "integration: integration tests against the FastAPI app",
+]

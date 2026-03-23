@@ -1,0 +1,47 @@
+# ── Secrets & environment ─────────────────────────────────────────────
+# .env contains real API keys (OpenAI, Gemini, LangSmith) — never commit
+.env
+.env.*
+!.env.example
+
+# ── Python runtime artifacts ──────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+
+# ── Virtual environments ──────────────────────────────────────────────
+.venv/
+venv/
+env/
+
+# ── Build & packaging artifacts ───────────────────────────────────────
+dist/
+build/
+*.egg-info/
+
+# ── Eval results (local benchmark artifacts, not source) ──────────────
+evals/results/
+
+# ── Local Qdrant storage volume ───────────────────────────────────────
+.qdrant/
+
+# ── IDE / editor config ──────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── OS metadata ───────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Next.js (ui/) ────────────────────────────────────────────────────
+ui/.next/
+ui/out/
+ui/node_modules/
+
+# ── Misc junk files ──────────────────────────────────────────────────
+=0.8.0
