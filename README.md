@@ -1,36 +1,63 @@
 <div align="center">
 
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="64" height="64" aria-hidden="true">
-  <path d="M16 4 A12 12 0 0 1 28 16" fill="none" stroke="#1E293B" stroke-width="2" stroke-linecap="round"/>
-  <path d="M16 4 A12 12 0 0 0 4 16" fill="none" stroke="#1E293B" stroke-width="2" stroke-linecap="round"/>
-  <path d="M16 9 A7 7 0 0 1 23 16" fill="none" stroke="#1E293B" stroke-width="2" stroke-linecap="round"/>
-  <path d="M16 9 A7 7 0 0 0 9 16" fill="none" stroke="#1E293B" stroke-width="2" stroke-linecap="round"/>
-  <path d="M16 2 C16 6, 25 8, 25 16 C25 20, 20 20, 16 20 C12 20, 11 17, 14 15 C17 13, 18 15, 16 16" fill="none" stroke="#D4A24C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="16" cy="16" r="2" fill="#D4A24C"/>
-</svg>
+<img src="docs/logo.svg" alt="Ariadne logo" width="80" height="80" />
 
 # Ariadne
 
-**AI Incident Analyzer** — paste raw logs, get a structured root-cause report.
+### Paste logs. Get a root-cause report. In seconds.
+
+Stop reading stack traces during an incident.<br/>
+Ariadne classifies the failure, retrieves similar past incidents, and hands you a structured report — root cause, confidence score, and next steps — so you can start fixing, not guessing.
+
+<br/>
+
+[**🚀 Live Demo**](https://ariadne-api.fly.dev/) &nbsp;·&nbsp; [**API Docs**](https://ariadne-api.fly.dev/docs) &nbsp;·&nbsp; [**Architecture**](docs/architecture.md)
+
+<br/>
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688)](https://fastapi.tiangolo.com/)
 [![LangGraph](https://img.shields.io/badge/LangGraph-0.2-orange)](https://langchain-ai.github.io/langgraph/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-<img src="docs/demo.gif" alt="Ariadne demo — paste logs, get structured analysis" width="680" />
+<br/>
+
+<img src="docs/demo.gif" alt="Ariadne — paste logs, get structured analysis" width="720" />
 
 </div>
 
 ---
 
-## What it does
+## How it works
 
-During an incident, engineers spend their first minutes doing the same thing: reading through hundreds of log lines to figure out what kind of failure this is. Ariadne does that step for you.
+```
+📋 Raw logs  ──►  🏷️ Classify failure  ──►  📚 Retrieve similar incidents  ──►  🧠 Root-cause report
+```
 
-Paste the relevant logs. Ariadne classifies the failure mode, retrieves similar incident patterns from a knowledge base, and produces a structured report in seconds — with a root cause, confidence score, and a short list of recommended next actions.
+Ariadne runs a **4-node [LangGraph](https://langchain-ai.github.io/langgraph/) pipeline** with a confidence-gated retry loop. If the first analysis pass scores below 0.7 confidence, it retrieves additional context and retries before returning.
 
-**Example input** — a PostgreSQL connection pool exhaustion incident:
+```mermaid
+flowchart LR
+    START([START]) --> classify
+    classify --> retrieve
+    retrieve --> analyze
+    analyze -->|confidence >= 0.7\nor attempts = 2| build_output
+    analyze -->|confidence < 0.7\nand attempts < 2| retrieve
+    build_output --> END([END])
+```
+
+| Node | What it does |
+|---|---|
+| **Classify** | LLM reads your logs → `incident_type` + `classification_confidence` |
+| **Retrieve** | Embeds the query → Qdrant hybrid search → top-3 similar incident patterns |
+| **Analyze** | LLM synthesizes logs + context → `root_cause`, `recommended_actions`, `analysis_confidence` |
+| **Build output** | Merges results into a typed response; retries Retrieve→Analyze once if confidence < 0.7 |
+
+---
+
+## Example
+
+**Input** — a PostgreSQL connection pool exhaustion incident:
 
 ```
 2026-03-24T14:22:01Z checkout-api ERROR postgres-primary connection pool exhausted after 120 waiting clients
@@ -60,18 +87,6 @@ Ariadne supports incident responders, on-call engineers, and SREs who need a fas
 ---
 
 ## Architecture
-
-The pipeline is a four-node LangGraph `StateGraph` with a confidence-gated retry loop:
-
-```mermaid
-flowchart LR
-    START([START]) --> classify
-    classify --> retrieve
-    retrieve --> analyze
-    analyze -->|confidence >= 0.7\nor attempts = 2| build_output
-    analyze -->|confidence < 0.7\nand attempts < 2| retrieve
-    build_output --> END([END])
-```
 
 | Layer | Path | Purpose |
 |---|---|---|
