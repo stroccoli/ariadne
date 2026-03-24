@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from starlette.requests import Request
 
+from ariadne.api.dependencies.auth import verify_api_key
+from ariadne.api.dependencies.limiter import limiter
 from ariadne.api.models.request import AnalyzeRequest
 from ariadne.api.models.response import (
     AnalysisMetadata,
@@ -17,11 +20,19 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.post("/analyze", response_model=AnalyzeResponse)
-async def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
-    """Run the incident analysis pipeline and return structured results."""
+@router.post(
+    "/analyze",
+    response_model=AnalyzeResponse,
+    dependencies=[Depends(verify_api_key)],
+)
+@limiter.limit("5/minute")
+async def analyze(request: Request, body: AnalyzeRequest) -> AnalyzeResponse:
+    """Run the incident analysis pipeline and return structured results.
+
+    Requires the X-API-Key header. Rate limited to 5 requests per minute per IP.
+    """
     try:
-        state = run_graph(logs=request.logs, mode=request.mode)
+        state = run_graph(logs=body.logs, mode=body.mode)
     except Exception:
         logger.exception("Pipeline failed")
         raise HTTPException(status_code=500, detail="Analysis pipeline failed")

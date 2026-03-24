@@ -49,3 +49,10 @@
 # flyctl launch added from .venv/.gitignore
 .venv/**/*
 fly.toml
+
+# ── Next.js (ui/) ────────────────────────────────────────────────────
+# node_modules and build outputs must not be sent to the remote builder.
+# The multi-stage Dockerfile installs and builds them from source.
+ui/node_modules/**
+ui/.next/**
+ui/out/**

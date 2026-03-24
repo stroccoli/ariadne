@@ -31,13 +31,12 @@ fly-launch: _check-flyctl
 	$(FLYCTL) launch \
 	  --no-deploy \
 	  --config infra/fly.toml \
-	  --dockerfile infra/Dockerfile \
 	  --name $(APP) \
 	  --region iad \
 	  --copy-config
 
 fly-secrets: _check-flyctl
-	@[ -f .env ] || { echo "Error: .env not found at project root"; exit 1; }
+	@[ -f .env.production ] || { echo "Error: .env.production not found at project root"; exit 1; }
 	@set -a && . ./.env.production && set +a && \
 	$(FLYCTL) secrets set \
 	  LLM_PROVIDER="$${LLM_PROVIDER}" \
@@ -48,11 +47,19 @@ fly-secrets: _check-flyctl
 	  QDRANT_URL="$${QDRANT_URL}" \
 	  QDRANT_API_KEY="$${QDRANT_API_KEY}" \
 	  ALLOWED_ORIGINS="$${ALLOWED_ORIGINS:-https://ariadne.vercel.app}" \
+	  API_KEY="$${API_KEY}" \
+	  SENTRY_DSN="$${SENTRY_DSN}" \
 	  LOG_FORMAT="json" \
 	  -a $(APP)
 
 fly-deploy: _check-flyctl
-	$(FLYCTL) deploy --config infra/fly.toml --remote-only -a $(APP)
+	@[ -f .env.production ] || { echo "Error: .env.production not found at project root"; exit 1; }
+	@set -a && . ./.env.production && set +a && \
+	$(FLYCTL) deploy \
+	  --config infra/fly.toml \
+	  --remote-only \
+	  --build-arg NEXT_PUBLIC_API_KEY="$${API_KEY}" \
+	  -a $(APP)
 
 fly-status: _check-flyctl
 	$(FLYCTL) status -a $(APP)

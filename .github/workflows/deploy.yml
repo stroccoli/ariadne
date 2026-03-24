@@ -1,8 +1,7 @@
 name: Deploy Backend
 
 on:
-  push:
-    branches: [main]
+  push: # run on all branches so feature branches get CI feedback
   pull_request:
     branches: [main]
 

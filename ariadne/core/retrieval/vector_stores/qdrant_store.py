@@ -84,6 +84,8 @@ class QdrantVectorStore(VectorStore):
         self.candidate_limit = max(candidate_limit, search_limit)
         self.dense_weight = dense_weight
         self.keyword_weight = keyword_weight
+        # check_compatibility=False suppresses the client-side version check, which can
+        # fail against Qdrant Cloud when the cluster version is ahead of the local client.
         self.client = QdrantClient(url=url, api_key=api_key, timeout=timeout, check_compatibility=False)
 
     def _ensure_collection(self, vector_size: int) -> None:

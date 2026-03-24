@@ -60,13 +60,9 @@ export class ApiError extends Error {
 // -- Helpers --
 
 function getBaseUrl(): string {
-  const url = process.env.NEXT_PUBLIC_API_URL;
-  if (!url) {
-    throw new ApiError(
-      "unexpected",
-      "NEXT_PUBLIC_API_URL is not configured. Set it in your environment variables.",
-    );
-  }
+  // Empty string means same-origin (production: UI and API served from the same Fly.io host).
+  // In development, set NEXT_PUBLIC_API_URL=http://localhost:8000 in .env.local.
+  const url = process.env.NEXT_PUBLIC_API_URL ?? "";
   return url.replace(/\/+$/, "");
 }
 
@@ -94,7 +90,13 @@ export async function analyzeIncident(
   try {
     response = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        // X-API-Key is required by the backend on POST /analyze.
+        // In development, set NEXT_PUBLIC_API_KEY in ui/.env.local.
+        // In production (Fly.io), it is baked in at Docker build time via --build-arg.
+        "X-API-Key": process.env.NEXT_PUBLIC_API_KEY ?? "",
+      },
       body: JSON.stringify({ logs, mode } satisfies AnalyzeRequest),
     });
   } catch {
