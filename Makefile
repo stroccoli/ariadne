@@ -34,7 +34,6 @@ fly-launch: _check-flyctl
 	  --name $(APP) \
 	  --region iad \
 	  --copy-config
-	$(FLYCTL) scale count 1 -a $(APP)
 
 fly-secrets: _check-flyctl
 	@[ -f .env.production ] || { echo "Error: .env.production not found at project root"; exit 1; }

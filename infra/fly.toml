@@ -1,4 +1,4 @@
-# fly.toml app configuration file generated for ariadne-api on 2026-03-24T09:04:42-05:00
+# fly.toml app configuration file generated for ariadne-api on 2026-03-24T09:50:01-05:00
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
@@ -33,4 +33,4 @@ primary_region = 'iad'
 
 [[vm]]
   size = 'shared-cpu-1x'
-  memory = '256mb'
+  memory = '512mb'

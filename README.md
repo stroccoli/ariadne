@@ -1,206 +1,392 @@
-# Ariadne — AI Incident Analyzer
+<div align="center">
 
-Multi-agent incident analysis pipeline built with LangGraph + FastAPI. Takes raw
-incident logs, classifies the failure mode, retrieves relevant troubleshooting
-context via RAG, and produces a structured root-cause report with confidence
-scores and recommended actions.
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="64" height="64" aria-hidden="true">
+  <path d="M16 4 A12 12 0 0 1 28 16" fill="none" stroke="#1E293B" stroke-width="2" stroke-linecap="round"/>
+  <path d="M16 4 A12 12 0 0 0 4 16" fill="none" stroke="#1E293B" stroke-width="2" stroke-linecap="round"/>
+  <path d="M16 9 A7 7 0 0 1 23 16" fill="none" stroke="#1E293B" stroke-width="2" stroke-linecap="round"/>
+  <path d="M16 9 A7 7 0 0 0 9 16" fill="none" stroke="#1E293B" stroke-width="2" stroke-linecap="round"/>
+  <path d="M16 2 C16 6, 25 8, 25 16 C25 20, 20 20, 16 20 C12 20, 11 17, 14 15 C17 13, 18 15, 16 16" fill="none" stroke="#D4A24C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="16" cy="16" r="2" fill="#D4A24C"/>
+</svg>
 
-![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688)
-<!-- ![CI](https://github.com/YOUR_USER/ariadne/actions/workflows/deploy.yml/badge.svg) -->
+# Ariadne
 
-## Quick Start
+**AI Incident Analyzer** — paste raw logs, get a structured root-cause report.
 
-```bash
-# 1. Clone and enter the project
-git clone https://github.com/YOUR_USER/ariadne.git
-cd ariadne
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/downloads/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688)](https://fastapi.tiangolo.com/)
+[![LangGraph](https://img.shields.io/badge/LangGraph-0.2-orange)](https://langchain-ai.github.io/langgraph/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-# 2. Copy environment template and fill in your API keys
-cp .env.example .env
-# Edit .env — at minimum set LLM_PROVIDER and its corresponding API key
+<img src="docs/demo.gif" alt="Ariadne demo — paste logs, get structured analysis" width="680" />
 
-# 3. Create a virtual environment
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-pip install -e .
+</div>
 
-# 4. Start Qdrant (needed for RAG retrieval)
-docker compose up -d
+---
 
-# 5. Index the knowledge base
-python scripts/index_data.py
+## What it does
 
-# 6. Run the API
-uvicorn ariadne.api.main:app --reload --port 8000
+During an incident, engineers spend their first minutes doing the same thing: reading through hundreds of log lines to figure out what kind of failure this is. Ariadne does that step for you.
+
+Paste the relevant logs. Ariadne classifies the failure mode, retrieves similar incident patterns from a knowledge base, and produces a structured report in seconds — with a root cause, confidence score, and a short list of recommended next actions.
+
+**Example input** — a PostgreSQL connection pool exhaustion incident:
+
+```
+2026-03-24T14:22:01Z checkout-api ERROR postgres-primary connection pool exhausted after 120 waiting clients
+2026-03-24T14:22:02Z checkout-api WARN transaction failed because too many clients already
+2026-03-24T14:22:03Z db-proxy ERROR postgres-primary refused new connection: remaining connection slots are reserved for non-replication superuser connections
+2026-03-24T14:22:04Z checkout-api INFO application workers healthy but writes completely blocked
 ```
 
-### Test it
+**Output:**
 
-```bash
-# Health check (no auth required)
-curl http://localhost:8000/health
-
-# Analyze an incident (requires X-API-Key when API_KEY is set)
-curl -X POST http://localhost:8000/analyze \
-  -H 'Content-Type: application/json' \
-  -H 'X-API-Key: your-api-key' \
-  -d '{"logs": "ERROR: connection timeout after 30s to payments-api.internal:8443"}'
+```json
+{
+  "incident_type": "database_issue",
+  "root_cause": "The checkout service cannot acquire database connections because the PostgreSQL connection pool is exhausted. The db-proxy is refusing new connections and all application writes are blocked, indicating pool saturation likely driven by slow or long-running transactions holding slots.",
+  "confidence": 0.91,
+  "recommended_actions": [
+    "Check pg_stat_activity for idle-in-transaction sessions holding pool slots — kill them if safe.",
+    "Compare the current connection count against max_connections on the primary.",
+    "Consider deploying PgBouncer in transaction-mode pooling to reduce per-connection overhead.",
+    "Review whether a recent deploy changed query patterns or removed connection cleanup logic."
+  ]
+}
 ```
 
-Interactive API docs are available at `http://localhost:8000/docs`.
+Ariadne supports incident responders, on-call engineers, and SREs who need a fast, structured starting point for triage. It does not execute remediations or replace the engineer's judgment — it speeds up the interpretation step.
+
+---
 
 ## Architecture
 
-The pipeline runs four LangGraph nodes in sequence with a conditional retry loop:
+The pipeline is a four-node LangGraph `StateGraph` with a confidence-gated retry loop:
 
+```mermaid
+flowchart LR
+    START([START]) --> classify
+    classify --> retrieve
+    retrieve --> analyze
+    analyze -->|confidence >= 0.7\nor attempts = 2| build_output
+    analyze -->|confidence < 0.7\nand attempts < 2| retrieve
+    build_output --> END([END])
 ```
-START → classify → retrieve → analyze ──→ build_output → END
-                      ↑          │
-                      └──────────┘
-                   (retry if confidence < 0.7,
-                    max 2 retrieval attempts)
-```
-
-<!-- TODO: Day 5 — full architecture diagram with Mermaid -->
-
-### Key components
 
 | Layer | Path | Purpose |
-|-------|------|---------|
-| API | `ariadne/api/` | FastAPI wrapper — `POST /analyze`, `GET /health`, `GET /ready` |
-| Pipeline | `ariadne/core/graph.py` | LangGraph orchestration and retry logic |
-| Agents | `ariadne/core/agents/` | Classifier, RAG retriever, Analyzer |
-| LLM providers | `ariadne/core/integrations/llm/` | OpenAI, Ollama, Gemini — swappable |
-| Embeddings | `ariadne/core/integrations/embeddings/` | OpenAI, Ollama, Gemini, local hash |
+|---|---|---|
+| API | `ariadne/api/` | FastAPI wrapper — auth, rate limiting, CORS, Sentry |
+| Pipeline | `ariadne/core/graph.py` | LangGraph `StateGraph` — 4 nodes, conditional retry routing |
+| Classifier | `ariadne/core/agents/classifier.py` | LLM call → `incident_type` + `classification_confidence` |
+| RAG retriever | `ariadne/core/agents/rag.py` | Embed query → Qdrant hybrid search → top-3 context docs |
+| Analyzer | `ariadne/core/agents/analyzer.py` | LLM call with context → `root_cause`, `recommended_actions`, `analysis_confidence` |
+| LLM providers | `ariadne/core/integrations/llm/` | OpenAI, Ollama, Gemini — swappable via `LLM_PROVIDER` |
+| Embeddings | `ariadne/core/integrations/embeddings/` | OpenAI, Ollama, Gemini, local hash — swappable |
 | Vector store | `ariadne/core/retrieval/` | Qdrant (hybrid search) or NoOp fallback |
-| Evals | `evals/` | Offline A/B prompt benchmarks |
+| Evals | `evals/` | Offline A/B prompt benchmark — 50 samples, rubric scoring |
 
-## Environment Variables
+Full diagram and ADR index → [docs/architecture.md](docs/architecture.md)
 
-See [.env.example](.env.example) for the full list with defaults and documentation.
+---
 
-Key variables:
+## Stack
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `LLM_PROVIDER` | Yes | `openai`, `ollama`, or `gemini` |
-| `OPENAI_API_KEY` | If provider=openai | OpenAI API key |
-| `GEMINI_API_KEY` | If provider=gemini | Google Gemini API key |
-| `EMBEDDING_PROVIDER` | Yes | `openai`, `ollama`, `gemini`, or `local_hash` |
-| `VECTOR_STORE` | Yes | `qdrant` or `none` |
-| `API_KEY` | Prod | Protects `POST /analyze` via `X-API-Key` header. Generate with `python -c "import secrets; print(secrets.token_hex(32))"`. If unset, auth is disabled (dev convenience only). |
-| `SENTRY_DSN` | No | Sentry project DSN for error reporting. App runs without it. |
-| `ALLOWED_ORIGINS` | No | Comma-separated CORS origins (defaults to localhost) |
+| Component | Technology | Why | Considered |
+|---|---|---|---|
+| Pipeline orchestration | LangGraph 0.2 | Declarative conditional edges, native LangSmith tracing, typed state | LangChain LCEL, custom Orchestrator (shipped Day 4, replaced Day 5 — see [ADR-001](docs/adr/ADR-001-langgraph.md)) |
+| API framework | FastAPI 0.115 | Async, ASGI, automatic OpenAPI docs, slowapi rate limiting | Flask, Django REST |
+| LLM (production) | Gemini 2.0 Flash | Permanent free tier (15 RPM, 1M TPD), reliable JSON generation | GPT-4o (no free tier), GPT-4o-mini (paid), Groq/Llama 3 — see [ADR-003](docs/adr/ADR-003-gemini.md) |
+| LLM (evals/dev) | OpenAI GPT-4o-mini | Controlled cost in offline benchmarks | — |
+| LLM (local dev) | Ollama llama3.1:8b | Zero cost, zero network, no API key | — |
+| Vector store | Qdrant + Qdrant Cloud | Hybrid search built-in, same client locally and in cloud, free tier 1 GB | pgvector/Supabase (7d pause), FAISS (no hybrid), Pinecone — see [ADR-004](docs/adr/ADR-004-qdrant.md) |
+| Embeddings (default local) | Ollama nomic-embed-text | Semantic quality, local, no API key | OpenAI text-embedding-3-small, Gemini text-embedding-004 |
+| Backend hosting | Fly.io shared-cpu-1x | Scale-to-zero (~$0/month), Docker-native deploy, HTTPS automatic | AWS App Runner ($5+/mo), EC2 t2.micro (12-month limit), Render (30-90s cold start) — see [ADR-002](docs/adr/ADR-002-flyio.md) |
+| Frontend hosting | Fly.io same-origin / Vercel | Next.js static export served from Docker image; Vercel optional for standalone | — |
+| Observability | LangSmith | Per-run traces, token counts, per-node latency | LangFuse |
+| Error tracking | Sentry | 5xx errors only, 10% trace sampling, free tier | — |
 
-## Running Evaluations
+---
 
-The `evals/` directory contains an offline A/B testing framework that benchmarks
-`detailed` vs `compact` prompt modes across 40+ incident samples with rubric-based
-scoring.
+## Local development
+
+### Prerequisites
+
+| Requirement | Version | Notes |
+|---|---|---|
+| Python | 3.11+ | Required by `pyproject.toml` |
+| Docker + Docker Compose | Any recent | Runs the local Qdrant instance |
+| An LLM API key **or** Ollama | See below | Gemini (free) · OpenAI (paid) · Ollama (local, free) |
+
+**Choosing a provider:**
+
+| Option | What to set in `.env` | Cost | Requires |
+|---|---|---|---|
+| **Gemini** (recommended) | `LLM_PROVIDER=gemini`<br>`EMBEDDING_PROVIDER=gemini`<br>`GEMINI_API_KEY=<key>` | Free tier | Google AI Studio account |
+| **Ollama** (fully local) | `LLM_PROVIDER=ollama`<br>`EMBEDDING_PROVIDER=ollama` | Free | Ollama running with `llama3.1:8b` + `nomic-embed-text:latest` |
+| **OpenAI** | `LLM_PROVIDER=openai`<br>`EMBEDDING_PROVIDER=openai`<br>`OPENAI_API_KEY=<key>` | Paid | Funded OpenAI account |
+| **No embeddings** | `EMBEDDING_PROVIDER=local_hash`<br>`VECTOR_STORE=none` | Free | Nothing — RAG disabled, lower quality |
+
+### Setup
 
 ```bash
-# Run a full A/B test
-python evals/run_ab_test.py
+# 1. Clone
+git clone https://github.com/YOUR_USER/ariadne.git
+cd ariadne
 
-# Run provider benchmark (e.g. 10 samples)
-python evals/run_provider_test.py -n 10
+# 2. Configure environment
+cp .env.example .env
+# Open .env and set LLM_PROVIDER + the corresponding API key (see table above)
 
-# List available samples
-python evals/run_ab_test.py --list-samples
+# 3. Create virtual environment
+python -m venv .venv
+source .venv/bin/activate       # Windows: .venv\Scripts\activate
 
-# Compare two saved benchmark runs
-python evals/compare_results.py
+# 4. Install dependencies
+pip install -r requirements.txt
+pip install -e .
+
+# 5. Start Qdrant (local vector store)
+docker compose up -d
+
+# 6. Index the knowledge base into Qdrant
+python scripts/index_data.py
+
+# 7. Start the API
+uvicorn ariadne.api.main:app --reload --port 8000
 ```
 
-Results are saved to `evals/results/` (gitignored — these are local artifacts).
+### Verify it's working
 
-The framework measures: incident type accuracy, root-cause quality (rubric-scored),
-action quality, latency, and token usage.
+```bash
+# Liveness
+curl http://localhost:8000/health
+# → {"status": "ok"}
 
-## API Reference
+# Analyze an incident (API_KEY not set in dev → auth is disabled)
+curl -X POST http://localhost:8000/analyze \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "logs": "ERROR postgres-primary connection pool exhausted after 120 waiting clients\nWARN transaction failed because too many clients already",
+    "mode": "detailed"
+  }'
+```
+
+Interactive API docs: `http://localhost:8000/docs`
+
+### Re-indexing the knowledge base
+
+Run after editing `data/incident_knowledge.json`:
+
+```bash
+# Local Qdrant (docker compose must be running)
+python scripts/index_data.py
+
+# Qdrant Cloud (production)
+QDRANT_URL=https://<cluster>.qdrant.io:6333 \
+QDRANT_API_KEY=<key> \
+python scripts/index_data.py
+```
+
+### Frontend (optional)
+
+```bash
+cd ui
+cp .env.example .env.local
+# Set NEXT_PUBLIC_API_URL=http://localhost:8000
+npm install
+npm run dev
+# open http://localhost:3000
+```
+
+---
+
+## Running evaluations
+
+The `evals/` directory contains an offline A/B benchmark that evaluates `detailed` vs `compact` prompt modes across 50 incident samples with rubric-based scoring.
+
+```bash
+# Full A/B benchmark (50 samples × 2 modes = 100 LLM calls)
+python evals/run_ab_test.py
+
+# List all 50 sample IDs
+python evals/run_ab_test.py --list-samples
+
+# Inspect a specific sample's rubric and expected output
+python evals/run_ab_test.py --describe-sample database_pool_checkout
+
+# Compare the two most recent benchmark runs
+python evals/compare_results.py
+
+# Provider benchmark with a subset (e.g. 10 samples)
+python evals/run_provider_test.py -n 10
+```
+
+Results are saved to `evals/results/` as `latest.json` and a timestamped copy.
+
+### What the metrics measure
+
+| Metric | How it's computed |
+|---|---|
+| **Incident type accuracy** | Exact match between `incident_type` and `expected_incident_type` in the sample definition |
+| **Root cause quality** | `0.85 × concept_coverage + 0.15 × uncertainty_score − 0.25 × forbidden_penalty`<br>Coverage = fraction of required keyword concepts present in the response |
+| **Action quality** | `0.75 × concept_coverage + 0.25 × count_score − 0.15 × discouraged_penalty`<br>Count score = `min(action_count / minimum_required, 1.0)` |
+| **Latency** | Wall-clock elapsed time for the full `run_graph()` call, including all LLM round-trips and retrieval |
+| **Token usage** | `prompt_tokens`, `completion_tokens`, `total_tokens` summed across all LLM calls in the run |
+
+The 50-sample library covers all five incident types (10 samples each): `timeout`, `dependency_failure`, `database_issue`, `memory_issue`, `unknown`. Unknown samples test both ambiguous cases (multiple plausible explanations) and out-of-taxonomy cases (clear root cause outside the Day 1 classification). Scoring implementation: [`evals/rubric_scoring.py`](evals/rubric_scoring.py).
+
+> **Tip:** use `LLM_PROVIDER=openai` for bulk eval runs — it gives consistent results and won't exhaust the Gemini free-tier RPM limit mid-run.
+
+---
+
+## Deployment
+
+The backend and UI are deployed as a single Docker image to [Fly.io](https://fly.io) (`shared-cpu-1x`, 512 MB, US East). The machine scales to zero when idle and resumes in ~2s on the first request.
+
+```
+Fly.io machine
+└── Docker container (infra/Dockerfile — multi-stage build)
+    ├── FastAPI API  (port 8080)
+    └── Next.js static export  ← built at Docker build time, served by FastAPI StaticFiles
+```
+
+For technical details:
+- [docs/adr/ADR-002-flyio.md](docs/adr/ADR-002-flyio.md) — why Fly.io over AWS
+- `infra/Dockerfile` and `infra/fly.toml` — infrastructure as code
+
+---
+
+## API reference
 
 ### `POST /analyze`
 
-Analyze incident logs and return a structured report.
+Run the incident analysis pipeline.
 
-**Authentication:** requires `X-API-Key: <your-key>` header (set `API_KEY` in env).
-**Rate limit:** 5 requests per minute per IP. Responds with `429` when exceeded.
+**Auth:** `X-API-Key: <your-key>` header. Set `API_KEY` in `.env`. If unset (dev mode), auth is disabled and a warning is logged at startup.  
+**Rate limit:** 5 requests per minute per IP. Returns `429` with `Retry-After: 60` when exceeded.
 
-**Request:**
+**Request body:**
+
 ```json
 {
-  "logs": "ERROR: connection timeout after 30s to payments-api.internal:8443",
+  "logs": "raw log lines from the incident",
   "mode": "detailed"
 }
 ```
 
-**Response:**
+`mode` is optional. Values: `"detailed"` (default) or `"compact"` (lower token cost).
+
+**Example:**
+
+```bash
+curl -X POST https://ariadne-api-polished-shape-2678.fly.dev/analyze \
+  -H 'Content-Type: application/json' \
+  -H 'X-API-Key: your-api-key' \
+  -d '{
+    "logs": "2026-03-24T14:22:01Z checkout-api ERROR postgres-primary connection pool exhausted\n2026-03-24T14:22:02Z checkout-api WARN transaction failed because too many clients already",
+    "mode": "detailed"
+  }'
+```
+
+**Response `200`:**
+
 ```json
 {
-  "incident_type": "timeout",
-  "root_cause": "The payments API is not responding within the expected timeframe...",
-  "confidence": 0.85,
+  "incident_type": "database_issue",
+  "root_cause": "The checkout service cannot acquire new database connections because the PostgreSQL pool is exhausted...",
+  "confidence": 0.91,
   "recommended_actions": [
-    "Check payments-api health and recent deployments",
-    "Review network connectivity to payments-api.internal:8443"
+    "Check pg_stat_activity for idle-in-transaction sessions holding pool slots.",
+    "Compare the current connection count against max_connections.",
+    "Consider deploying PgBouncer in transaction-mode pooling."
   ],
   "metadata": {
     "retrieval_attempts": 1,
     "llm_calls": 2,
-    "node_timings": { "classify": 1.2, "retrieve_1": 0.1, "analyze": 2.5 },
-    "usage": { "prompt_tokens": 530, "completion_tokens": 85, "total_tokens": 615 }
+    "node_timings": {
+      "classify": 1.2,
+      "retrieve_1": 0.08,
+      "analyze": 2.9,
+      "build_output": 0.001,
+      "total": 4.19
+    },
+    "usage": {
+      "prompt_tokens": 620,
+      "completion_tokens": 112,
+      "total_tokens": 732
+    }
   }
 }
 ```
 
+**`incident_type` values:** `timeout` · `dependency_failure` · `database_issue` · `memory_issue` · `unknown`
+
+**Error responses:**
+
+| Code | Meaning |
+|---|---|
+| `401` | Missing or invalid `X-API-Key` header |
+| `422` | Malformed request body |
+| `429` | Rate limit exceeded (5 req/min/IP) |
+| `500` | Pipeline error |
+
+---
+
 ### `GET /health`
-Returns `{"status": "ok"}` — liveness check.
+
+Liveness check. No auth required. Used by Fly.io health checks (every 30s).
+
+```bash
+curl https://ariadne-api-polished-shape-2678.fly.dev/health
+# → {"status": "ok"}
+```
+
+---
 
 ### `GET /ready`
-Returns `{"status": "ready"}` — readiness check.
 
-## Deployment
+Readiness check. No auth required.
 
-The backend deploys to [Fly.io](https://fly.io) via GitHub Actions on push to `main`.
-
-Infrastructure files live in `infra/`:
-- `infra/Dockerfile` — production container image
-- `infra/fly.toml` — Fly.io machine configuration
-
-See `.github/workflows/deploy.yml` for the full CI/CD pipeline (test → deploy → smoke test).
-
-## Project Structure
-
-```
-ariadne/
-  api/                        FastAPI application
-    main.py                   App setup, CORS, lifespan
-    routes/                   Endpoint handlers
-    models/                   Request/response schemas
-  core/                       Pipeline logic
-    config.py                 Env-driven factory for LLM, embedding, vector store
-    models.py                 Typed output schemas (Pydantic)
-    state.py                  Shared IncidentState
-    graph.py                  LangGraph orchestration and retry logic
-    main.py                   CLI entry point
-    agents/                   Classifier, RAG, Analyzer agents
-    integrations/             LLM and embedding provider implementations
-    retrieval/                Vector store abstraction and dataset loading
-data/                         Knowledge base (incident_knowledge.json)
-evals/                        Offline A/B benchmark framework
-infra/                        Dockerfile, fly.toml
-scripts/                      Data indexing utilities
-tests/                        Unit and integration tests
+```bash
+curl https://ariadne-api-polished-shape-2678.fly.dev/ready
+# → {"status": "ready"}
 ```
 
-## TODO
+---
 
-- [ ] Architecture diagram (Day 5)
-- [ ] Frontend UI + Vercel deployment (Day 3B)
-- [ ] Contributing guide
-- [ ] Qdrant Cloud integration for production RAG
-- [ ] Custom domain setup
-- [ ] Rate limiting and authentication
-# ariadne
+## Roadmap
+
+These items were deliberately deferred to keep the project shipping rather than building:
+
+1. **Groq / Llama 3 provider** — A `GroqClient` implementation would give a second permanent free-tier LLM with different quality/speed characteristics. The provider-agnostic interface makes this a ~50-line addition.
+
+2. **Streaming response for `POST /analyze`** — The API currently returns the full result after the entire pipeline finishes (~3–6s). Server-sent events (SSE) would allow the UI to show partial results as each node completes, improving perceived latency significantly.
+
+3. **Background knowledge-base reindexing** — `scripts/index_data.py` must currently be run manually after any update to `data/incident_knowledge.json`. A `POST /admin/reindex` endpoint would make updates self-service.
+
+4. **Metadata filters in retrieval** — The Qdrant query currently uses only dense + BM25 similarity. Filtering by `incident_type` (from the classifier output) before retrieval runs would improve precision for the known taxonomy.
+
+5. **Confidence calibration** — The current `confidence` score is self-reported by the LLM and not calibrated against ground-truth outcomes. A Platt scaling pass over eval results would make the score meaningful as a triage signal.
+
+---
+
+## Contributing
+
+```bash
+# Run unit tests (no external services required)
+pytest tests/unit/
+
+# Run integration tests (API must be running on :8000)
+pytest tests/integration/
+
+# Run the full offline benchmark
+python evals/run_ab_test.py
+```
+
+Keep PRs focused — don't mix feature additions with refactors. If you're adding a new LLM provider, follow the existing pattern in `ariadne/core/integrations/llm/`: implement `LLMClient`, wire it in `config.py`, add unit tests.
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE).

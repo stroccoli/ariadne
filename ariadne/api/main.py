@@ -48,7 +48,7 @@ def _init_sentry() -> None:
 
     sentry_sdk.init(
         dsn=dsn,
-        traces_sample_rate=0.1,  # 10% — ~30 traces/month on demo traffic; well within free tier
+        traces_sample_rate=0.1,
         send_default_pii=False,
         before_send=_sentry_before_send,
     )
