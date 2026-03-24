@@ -7,7 +7,7 @@ app = 'ariadne-api'
 primary_region = 'iad'
 
 [build]
-  dockerfile = 'infra/Dockerfile'
+  dockerfile = './Dockerfile'
 
 [env]
   PORT = '8080'
@@ -15,8 +15,8 @@ primary_region = 'iad'
 [http_service]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = 'off'
-  auto_start_machines = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = false
   min_machines_running = 0
 
   [http_service.concurrency]
