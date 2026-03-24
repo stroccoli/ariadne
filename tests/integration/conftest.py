@@ -5,6 +5,7 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
+from ariadne.api.dependencies.auth import verify_api_key
 from ariadne.api.main import app
 from ariadne.core.config import get_embedding_client, get_vector_store
 from ariadne.core.models import AnalysisOutput, IncidentReportOutput
@@ -67,9 +68,12 @@ def _make_incident_state(
 
 @pytest.fixture()
 def client():
-    """Provide a FastAPI TestClient with lru_cache cleanup."""
+    """Provide a FastAPI TestClient with lru_cache cleanup and auth bypassed."""
+    # Override the API key dependency so tests don't require a real key value
+    app.dependency_overrides[verify_api_key] = lambda: None
     with TestClient(app) as c:
         yield c
+    app.dependency_overrides.clear()
     get_vector_store.cache_clear()
     get_embedding_client.cache_clear()
 

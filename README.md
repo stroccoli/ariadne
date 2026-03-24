@@ -39,12 +39,13 @@ uvicorn ariadne.api.main:app --reload --port 8000
 ### Test it
 
 ```bash
-# Health check
+# Health check (no auth required)
 curl http://localhost:8000/health
 
-# Analyze an incident
+# Analyze an incident (requires X-API-Key when API_KEY is set)
 curl -X POST http://localhost:8000/analyze \
   -H 'Content-Type: application/json' \
+  -H 'X-API-Key: your-api-key' \
   -d '{"logs": "ERROR: connection timeout after 30s to payments-api.internal:8443"}'
 ```
 
@@ -89,6 +90,8 @@ Key variables:
 | `GEMINI_API_KEY` | If provider=gemini | Google Gemini API key |
 | `EMBEDDING_PROVIDER` | Yes | `openai`, `ollama`, `gemini`, or `local_hash` |
 | `VECTOR_STORE` | Yes | `qdrant` or `none` |
+| `API_KEY` | Prod | Protects `POST /analyze` via `X-API-Key` header. Generate with `python -c "import secrets; print(secrets.token_hex(32))"`. If unset, auth is disabled (dev convenience only). |
+| `SENTRY_DSN` | No | Sentry project DSN for error reporting. App runs without it. |
 | `ALLOWED_ORIGINS` | No | Comma-separated CORS origins (defaults to localhost) |
 
 ## Running Evaluations
@@ -121,6 +124,9 @@ action quality, latency, and token usage.
 ### `POST /analyze`
 
 Analyze incident logs and return a structured report.
+
+**Authentication:** requires `X-API-Key: <your-key>` header (set `API_KEY` in env).
+**Rate limit:** 5 requests per minute per IP. Responds with `429` when exceeded.
 
 **Request:**
 ```json

@@ -1,4 +1,4 @@
-# fly.toml app configuration file generated for ariadne-api on 2026-03-23T09:28:13-05:00
+# fly.toml app configuration file generated for ariadne-api on 2026-03-24T09:04:42-05:00
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
@@ -7,7 +7,7 @@ app = 'ariadne-api'
 primary_region = 'iad'
 
 [build]
-  dockerfile = './Dockerfile'
+  dockerfile = 'infra/Dockerfile'
 
 [env]
   PORT = '8080'
