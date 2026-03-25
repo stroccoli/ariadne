@@ -29,6 +29,7 @@ class IncidentState(BaseModel):
 
     # --- written by RAGAgent ---
     context: list[str] = Field(default_factory=list)
+    retrieved_doc_titles: list[str] = Field(default_factory=list)
 
     # --- written by AnalyzerAgent ---
     analysis: Optional[AnalysisOutput] = None
