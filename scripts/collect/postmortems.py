@@ -1,0 +1,144 @@
+from __future__ import annotations
+
+import json
+import logging
+import re
+import time
+from datetime import datetime
+from pathlib import Path
+
+import requests
+
+from ariadne.core.retrieval.document import IngestionDocument
+
+logger = logging.getLogger(__name__)
+
+POSTMORTEMS_README_URL = (
+    "https://raw.githubusercontent.com/danluu/post-mortems/master/README.md"
+)
+
+_LINE_PATTERN = re.compile(
+    r"^\s*-\s+"
+    r"(?:\[([^\]]+)\]\s+)?"
+    r"\[([^\]]+)\]"
+    r"\(([^)]+)\)",
+    re.MULTILINE,
+)
+
+
+class PostmortemsCollector:
+
+    def __init__(self, github_token: str | None = None) -> None:
+        self.session = requests.Session()
+        self.session.headers["User-Agent"] = "ariadne-rag-pipeline/1.0"
+        if github_token:
+            self.session.headers["Authorization"] = f"Bearer {github_token}"
+
+    def collect(
+        self,
+        max_entries: int = 1000,
+        output_path: Path | None = None,
+    ) -> list[IngestionDocument]:
+        logger.info("Fetching danluu/post-mortems README...")
+        readme_text = self._fetch_readme()
+
+        logger.info("Parsing post-mortem entries...")
+        entries = self._parse_readme(readme_text)
+        logger.info("Found %d entries in README", len(entries))
+
+        docs = [
+            self._entry_to_document(i, company, title, url)
+            for i, (company, title, url) in enumerate(entries[:max_entries])
+        ]
+
+        logger.info("Created %d IngestionDocuments from post-mortems", len(docs))
+
+        if output_path:
+            self._save(docs, output_path)
+
+        return docs
+
+    def _fetch_readme(self) -> str:
+        response = self.session.get(POSTMORTEMS_README_URL, timeout=30)
+        response.raise_for_status()
+        return response.text
+
+    def _parse_readme(self, text: str) -> list[tuple[str, str, str]]:
+        entries: list[tuple[str, str, str]] = []
+        for match in _LINE_PATTERN.finditer(text):
+            company = (match.group(1) or "").strip()
+            title = (match.group(2) or "").strip()
+            url = (match.group(3) or "").strip()
+
+            if not title or not url:
+                continue
+            if not url.startswith("http"):
+                continue
+
+            entries.append((company, title, url))
+
+        return entries
+
+    def _entry_to_document(
+        self, index: int, company: str, title: str, url: str
+    ) -> IngestionDocument:
+        if company:
+            content = f"{company} incident: {title}"
+        else:
+            content = title
+        service = company.lower().replace(" ", "_") if company else ""
+
+        tags = _extract_tags_from_title(title)
+
+        return IngestionDocument(
+            id=f"pm-{index:05d}",
+            title=title,
+            content=content,
+            source="postmortem",
+            source_url=url,
+            tags=tags,
+            severity="unknown",
+            service=service,
+            created_at=None,
+        )
+
+    def _save(self, docs: list[IngestionDocument], path: Path) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        data = [doc.model_dump(mode="json") for doc in docs]
+        path.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
+        logger.info("Saved %d post-mortems to %s", len(docs), path)
+
+
+_INCIDENT_KEYWORDS = {
+    "outage": ["outage"],
+    "downtime": ["downtime"],
+    "degradation": ["degradation"],
+    "latency": ["latency", "performance"],
+    "timeout": ["timeout"],
+    "memory": ["memory", "oom"],
+    "database": ["database"],
+    "network": ["network"],
+    "dns": ["dns"],
+    "ssl": ["ssl", "tls"],
+    "deploy": ["deployment"],
+    "crash": ["crash"],
+    "overflow": ["overflow"],
+    "leak": ["memory-leak"],
+    "corruption": ["data-corruption"],
+    "ddos": ["ddos", "security"],
+    "hack": ["security", "breach"],
+}
+
+
+def _extract_tags_from_title(title: str) -> list[str]:
+    lower = title.lower()
+    tags: list[str] = []
+    for keyword, tag_list in _INCIDENT_KEYWORDS.items():
+        if keyword in lower:
+            tags.extend(tag_list)
+    return list(dict.fromkeys(tags))
+
+
+def load_collected_documents(path: Path) -> list[IngestionDocument]:
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    return [IngestionDocument.model_validate(item) for item in raw]

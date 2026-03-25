@@ -1,0 +1,811 @@
+{
+  "recall_at_k": {
+    "recall@1": 0.0,
+    "recall@3": 0.0,
+    "recall@5": 0.0
+  },
+  "mrr": 0.0,
+  "n_queries": 50,
+  "per_query": [
+    {
+      "query_id": "timeout_checkout_dependency",
+      "query_text": "Checkout timeouts caused by a slow dependency",
+      "retrieved_ids": [
+        "Checkout timeouts caused by a slow dependency: Rep",
+        "Checkout timeouts caused by a slow dependency\nRepe",
+        "Cache dependency timeout pattern: Redis or cache t"
+      ],
+      "relevant_ids": [
+        "timeout_checkout_dependency"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "database_pool_exhaustion",
+      "query_text": "Database pool exhaustion pattern",
+      "retrieved_ids": [
+        "Database pool exhaustion pattern\nConnection pool e",
+        "Database pool exhaustion pattern: Connection pool ",
+        "tsdb: fix memory leaks in buffer pools\nSummary\r\n- "
+      ],
+      "relevant_ids": [
+        "database_pool_exhaustion"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "auth_dependency_outage",
+      "query_text": "Dependency outage with connection refusal",
+      "retrieved_ids": [
+        "Dependency outage with connection refusal\nConnecti",
+        "Dependency outage with connection refusal: Connect",
+        "Redis connection refused\nRedis connection refused "
+      ],
+      "relevant_ids": [
+        "auth_dependency_outage"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "memory_pressure_restart_loop",
+      "query_text": "Memory pressure before restarts",
+      "retrieved_ids": [
+        "Memory pressure before restarts: Out-of-memory inc",
+        "Memory pressure before restarts\nOut-of-memory inci",
+        "Long-lived process memory leak\nWhen memory usage c"
+      ],
+      "relevant_ids": [
+        "memory_pressure_restart_loop"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "database_primary_unavailable",
+      "query_text": "Primary database unavailable",
+      "retrieved_ids": [
+        "Primary database unavailable: Database incidents w",
+        "Primary database unavailable\nDatabase incidents wi",
+        "Disk full errors in database systems: Write failur"
+      ],
+      "relevant_ids": [
+        "database_primary_unavailable"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "retry_storm_timeout_feedback",
+      "query_text": "Retry storm feedback loop",
+      "retrieved_ids": [
+        "Retry storm feedback loop\nAggressive retries can t",
+        "Retry storm feedback loop: Aggressive retries can ",
+        "Fix aggregated discovery retry on fetch failure\nWh"
+      ],
+      "relevant_ids": [
+        "retry_storm_timeout_feedback"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "dns_or_service_discovery_failure",
+      "query_text": "Service discovery and DNS failures",
+      "retrieved_ids": [
+        "Service discovery and DNS failures\nTransient name ",
+        "Service discovery and DNS failures: Transient name",
+        "[BUG] Internal DNS server randomly not working sin"
+      ],
+      "relevant_ids": [
+        "dns_or_service_discovery_failure"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "storage_saturation_database_latency",
+      "query_text": "Storage saturation driving database latency",
+      "retrieved_ids": [
+        "Storage saturation driving database latency: When ",
+        "Storage saturation driving database latency\nWhen d",
+        "Disk full errors in database systems\nWrite failure"
+      ],
+      "relevant_ids": [
+        "storage_saturation_database_latency"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "deadlock_write_contention",
+      "query_text": "Database deadlocks under concurrent writes",
+      "retrieved_ids": [
+        "Database deadlocks under concurrent writes\nDeadloc",
+        "Database deadlocks under concurrent writes: Deadlo",
+        "Password authentication error for database repeats"
+      ],
+      "relevant_ids": [
+        "deadlock_write_contention"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "cache_dependency_timeout",
+      "query_text": "Cache dependency timeout pattern",
+      "retrieved_ids": [
+        "Cache dependency timeout pattern\nRedis or cache ti",
+        "Cache dependency timeout pattern: Redis or cache t",
+        "Mixed CPU saturation and timeout signals\nIf deadli"
+      ],
+      "relevant_ids": [
+        "cache_dependency_timeout"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "thread_pool_starvation",
+      "query_text": "Thread pool starvation and latency",
+      "retrieved_ids": [
+        "Thread pool starvation and latency\nIf request late",
+        "Thread pool starvation and latency: If request lat",
+        "Database pool exhaustion pattern: Connection pool "
+      ],
+      "relevant_ids": [
+        "thread_pool_starvation"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "kubernetes_oomkill_pattern",
+      "query_text": "Kubernetes OOMKilled restart sequence",
+      "retrieved_ids": [
+        "Kubernetes OOMKilled restart sequence\nPods that re",
+        "Kubernetes OOMKilled restart sequence: Pods that r",
+        "Some crashed or OOMKilled containers fail to resta"
+      ],
+      "relevant_ids": [
+        "kubernetes_oomkill_pattern"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "certificate_expiry_edge_failure",
+      "query_text": "Expired certificate on ingress or edge",
+      "retrieved_ids": [
+        "Expired certificate on ingress or edge: TLS handsh",
+        "Expired certificate on ingress or edge\nTLS handsha",
+        "Can't generate snowflake dynamic credentials becau"
+      ],
+      "relevant_ids": [
+        "certificate_expiry_edge_failure"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "rate_limit_dependency_failure",
+      "query_text": "Dependency rate limiting under burst traffic",
+      "retrieved_ids": [
+        "Dependency rate limiting under burst traffic\nA sur",
+        "Dependency rate limiting under burst traffic: A su",
+        "Dependency outage with connection refusal\nConnecti"
+      ],
+      "relevant_ids": [
+        "rate_limit_dependency_failure"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "queue_backlog_consumer_lag",
+      "query_text": "Queue backlog and consumer lag",
+      "retrieved_ids": [
+        "Queue backlog and consumer lag\nWhen queue depth in",
+        "Queue backlog and consumer lag: When queue depth i",
+        "Retry storm feedback loop\nAggressive retries can t"
+      ],
+      "relevant_ids": [
+        "queue_backlog_consumer_lag"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "api_gateway_504_dependency",
+      "query_text": "Gateway 504 caused by downstream saturation",
+      "retrieved_ids": [
+        "Gateway 504 caused by downstream saturation: Repea",
+        "Gateway 504 caused by downstream saturation\nRepeat",
+        "Checkout timeouts caused by a slow dependency\nRepe"
+      ],
+      "relevant_ids": [
+        "api_gateway_504_dependency"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "replication_lag_read_staleness",
+      "query_text": "Replication lag causing stale or inconsistent reads",
+      "retrieved_ids": [
+        "Replication lag causing stale or inconsistent read",
+        "Replication lag causing stale or inconsistent read",
+        "Writes sent to read-only replica\nRead-only transac"
+      ],
+      "relevant_ids": [
+        "replication_lag_read_staleness"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "disk_full_database_errors",
+      "query_text": "Disk full errors in database systems",
+      "retrieved_ids": [
+        "Disk full errors in database systems\nWrite failure",
+        "Disk full errors in database systems: Write failur",
+        "Primary database unavailable\nDatabase incidents wi"
+      ],
+      "relevant_ids": [
+        "disk_full_database_errors"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "partner_api_schema_change",
+      "query_text": "Partner API schema or contract change",
+      "retrieved_ids": [
+        "Partner API schema or contract change\nA burst of p",
+        "Partner API schema or contract change: A burst of ",
+        "Preserve externalDocs and example in CRD structura"
+      ],
+      "relevant_ids": [
+        "partner_api_schema_change"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "circuit_breaker_opening_pattern",
+      "query_text": "Circuit breaker opening after dependency instability",
+      "retrieved_ids": [
+        "Circuit breaker opening after dependency instabili",
+        "Circuit breaker opening after dependency instabili",
+        "Dependency outage with connection refusal\nConnecti"
+      ],
+      "relevant_ids": [
+        "circuit_breaker_opening_pattern"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "memory_leak_long_lived_process",
+      "query_text": "Long-lived process memory leak",
+      "retrieved_ids": [
+        "Long-lived process memory leak\nWhen memory usage c",
+        "Long-lived process memory leak: When memory usage ",
+        "Memleak in client-go transport.tlsCache\nWhat happe"
+      ],
+      "relevant_ids": [
+        "memory_leak_long_lived_process"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "regional_network_partition",
+      "query_text": "Regional network partition symptoms",
+      "retrieved_ids": [
+        "Regional network partition symptoms\nSimultaneous c",
+        "Regional network partition symptoms: Simultaneous ",
+        "network issue on ubuntu 24.04\nWhat happened?\n\nclus"
+      ],
+      "relevant_ids": [
+        "regional_network_partition"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "postgres_authentication_failure",
+      "query_text": "Postgres authentication failures",
+      "retrieved_ids": [
+        "Postgres authentication failures\nPassword authenti",
+        "Postgres authentication failures: Password authent",
+        "Password authentication error for database repeats"
+      ],
+      "relevant_ids": [
+        "postgres_authentication_failure"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "mongo_server_selection_timeout",
+      "query_text": "Mongo server selection timeout",
+      "retrieved_ids": [
+        "Mongo server selection timeout: Mongo server selec",
+        "Mongo server selection timeout\nMongo server select",
+        "DRA: return error on filter timeout instead of uns"
+      ],
+      "relevant_ids": [
+        "mongo_server_selection_timeout"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "postgres_replica_read_only_write",
+      "query_text": "Writes sent to read-only replica",
+      "retrieved_ids": [
+        "Writes sent to read-only replica: Read-only transa",
+        "Writes sent to read-only replica\nRead-only transac",
+        "Replication lag causing stale or inconsistent read"
+      ],
+      "relevant_ids": [
+        "postgres_replica_read_only_write"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "statement_timeout_slow_aggregation",
+      "query_text": "Statement timeout from slow aggregation queries",
+      "retrieved_ids": [
+        "Statement timeout from slow aggregation queries\nSt",
+        "Statement timeout from slow aggregation queries: S",
+        "Checkout timeouts caused by a slow dependency: Rep"
+      ],
+      "relevant_ids": [
+        "statement_timeout_slow_aggregation"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "redis_connection_refused",
+      "query_text": "Redis connection refused",
+      "retrieved_ids": [
+        "Redis connection refused: Redis connection refused",
+        "Redis connection refused\nRedis connection refused ",
+        "Dependency outage with connection refusal: Connect"
+      ],
+      "relevant_ids": [
+        "redis_connection_refused"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "tls_clock_skew_validation",
+      "query_text": "TLS or token failures caused by clock skew",
+      "retrieved_ids": [
+        "TLS or token failures caused by clock skew\nJWT not",
+        "TLS or token failures caused by clock skew: JWT no",
+        "Expired certificate on ingress or edge\nTLS handsha"
+      ],
+      "relevant_ids": [
+        "tls_clock_skew_validation"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "filesystem_permission_regression",
+      "query_text": "Filesystem permission regression after policy change",
+      "retrieved_ids": [
+        "Filesystem permission regression after policy chan",
+        "Filesystem permission regression after policy chan",
+        "[BUG] Secrets (likely configs too) have incorrect "
+      ],
+      "relevant_ids": [
+        "filesystem_permission_regression"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "invalid_runtime_configuration",
+      "query_text": "Invalid runtime configuration after deploy",
+      "retrieved_ids": [
+        "Invalid runtime configuration after deploy\nMissing",
+        "Invalid runtime configuration after deploy: Missin",
+        "[BUG] remote includes fail with invalid commit sha"
+      ],
+      "relevant_ids": [
+        "invalid_runtime_configuration"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "local_disk_full_application_host",
+      "query_text": "Application host out of disk space",
+      "retrieved_ids": [
+        "Application host out of disk space: No space left ",
+        "Application host out of disk space\nNo space left o",
+        "False error regarding no space left on device\nWhat"
+      ],
+      "relevant_ids": [
+        "local_disk_full_application_host"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "partner_feed_vs_local_db_mixed",
+      "query_text": "Mixed partner timeout and database contention signals",
+      "retrieved_ids": [
+        "Mixed partner timeout and database contention sign",
+        "Mixed partner timeout and database contention sign",
+        "Mixed CPU saturation and timeout signals\nIf deadli"
+      ],
+      "relevant_ids": [
+        "partner_feed_vs_local_db_mixed"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "cpu_saturation_vs_timeout_mixed",
+      "query_text": "Mixed CPU saturation and timeout signals",
+      "retrieved_ids": [
+        "Mixed CPU saturation and timeout signals\nIf deadli",
+        "Mixed CPU saturation and timeout signals: If deadl",
+        "Mixed partner timeout and database contention sign"
+      ],
+      "relevant_ids": [
+        "cpu_saturation_vs_timeout_mixed"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "gh-kubernetes-134891-chunk-0-of-2",
+      "query_text": "integration testing: leaked goroutine",
+      "retrieved_ids": [
+        "integration testing: leaked goroutine\nWhat happene",
+        "integration testing: leaked goroutine\nNot sure. On",
+        "Fix goroutine leaks in ephemeral volume controller"
+      ],
+      "relevant_ids": [
+        "gh-kubernetes-134891-chunk-0-of-2"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "gh-kubernetes-137629-chunk-0-of-2",
+      "query_text": "Image Pulling Authorization: fix the allowlisting policy",
+      "retrieved_ids": [
+        "Image Pulling Authorization: fix the allowlisting ",
+        "Image Pulling Authorization: fix the allowlisting ",
+        "[BUG] pull_policy\nDescription\n\n [CODE BLOCK REMOVE"
+      ],
+      "relevant_ids": [
+        "gh-kubernetes-137629-chunk-0-of-2"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "gh-kubernetes-126005-chunk-0-of-2",
+      "query_text": "Fix metrics cache in EndpointSlice Reconciler",
+      "retrieved_ids": [
+        "Fix metrics cache in EndpointSlice Reconciler\nWhat",
+        "Fix metrics cache in EndpointSlice Reconciler\nFixe",
+        "Avoid poisoning the trusted certificate cache on e"
+      ],
+      "relevant_ids": [
+        "gh-kubernetes-126005-chunk-0-of-2"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "gh-kubernetes-137897-chunk-0-of-3",
+      "query_text": "scheduler: fix race in DRA pending allocation sharing",
+      "retrieved_ids": [
+        "scheduler: fix race in DRA pending allocation shar",
+        "scheduler: fix race in DRA pending allocation shar",
+        "scheduler: fix race in DRA pending allocation shar"
+      ],
+      "relevant_ids": [
+        "gh-kubernetes-137897-chunk-0-of-3"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "gh-kubernetes-137617-chunk-0-of-3",
+      "query_text": "DRA scheduler plugin cannot fulfill gang scheduling with shared ResourceClaims",
+      "retrieved_ids": [
+        "DRA scheduler plugin cannot fulfill gang schedulin",
+        "DRA scheduler plugin cannot fulfill gang schedulin",
+        "DRA scheduler plugin cannot fulfill gang schedulin"
+      ],
+      "relevant_ids": [
+        "gh-kubernetes-137617-chunk-0-of-3"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "gh-kubernetes-137482-chunk-0-of-4",
+      "query_text": "apiserver: tolerate APF header race with timeout handler in priority-and-fairnes",
+      "retrieved_ids": [
+        "apiserver: tolerate APF header race with timeout h",
+        "apiserver: tolerate APF header race with timeout h",
+        "apiserver: tolerate APF header race with timeout h"
+      ],
+      "relevant_ids": [
+        "gh-kubernetes-137482-chunk-0-of-4"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "gh-kubernetes-135464-chunk-0-of-2",
+      "query_text": "Relax the noise margin threshold in TestConcurrencyIsolation",
+      "retrieved_ids": [
+        "Relax the noise margin threshold in TestConcurrenc",
+        "Relax the noise margin threshold in TestConcurrenc",
+        "Fix TestGetConntrackMax to align with capped connt"
+      ],
+      "relevant_ids": [
+        "gh-kubernetes-135464-chunk-0-of-2"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "gh-kubernetes-137947-chunk-0-of-2",
+      "query_text": "DATA RACE: kubelet - k8s.io/cri-client/pkg.(*remoteImageService).streamImagesV1",
+      "retrieved_ids": [
+        "DATA RACE: kubelet - k8s.io/cri-client/pkg.(*remot",
+        "DATA RACE: kubelet - k8s.io/cri-client/pkg.(*remot",
+        "kubelet: fix cgroup-per-qos kill race for DRA heal"
+      ],
+      "relevant_ids": [
+        "gh-kubernetes-137947-chunk-0-of-2"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "gh-kubernetes-135139-chunk-0-of-4",
+      "query_text": "Add field selector support for status.replicas on ReplicaSet",
+      "retrieved_ids": [
+        "Add field selector support for status.replicas on ",
+        "Add field selector support for status.replicas on ",
+        "Add field selector support for status.replicas on "
+      ],
+      "relevant_ids": [
+        "gh-kubernetes-135139-chunk-0-of-4"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "gh-kubernetes-133628",
+      "query_text": "Automated cherry pick of #133562: DRA: wait for stats to converge in \"creates sl",
+      "retrieved_ids": [
+        "Automated cherry pick of #133562: DRA: wait for st",
+        "Automated cherry pick of #130164: Deflake the PodR",
+        "Automated cherry pick of #135155: Fix NPE in CEL s"
+      ],
+      "relevant_ids": [
+        "gh-kubernetes-133628"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "gh-kubernetes-137725-chunk-0-of-2",
+      "query_text": "Fix MemoryQoS for BestEffort pods on cgroup v2",
+      "retrieved_ids": [
+        "Fix MemoryQoS for BestEffort pods on cgroup v2\n- B",
+        "kubelet: fix MemoryQoS for BestEffort pods on cgro",
+        "Fix MemoryQoS for BestEffort pods on cgroup v2\nWha"
+      ],
+      "relevant_ids": [
+        "gh-kubernetes-137725-chunk-0-of-2"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "gh-kubernetes-137985-chunk-0-of-4",
+      "query_text": "kubelet: fix MemoryQoS for BestEffort pods on cgroup v2",
+      "retrieved_ids": [
+        "kubelet: fix MemoryQoS for BestEffort pods on cgro",
+        "kubelet: fix MemoryQoS for BestEffort pods on cgro",
+        "kubelet: fix MemoryQoS for BestEffort pods on cgro"
+      ],
+      "relevant_ids": [
+        "gh-kubernetes-137985-chunk-0-of-4"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "gh-kubernetes-134858",
+      "query_text": "Automated cherry pick of #129404: fix: killPodOptions support JSON serialization",
+      "retrieved_ids": [
+        "Automated cherry pick of #129404: fix: killPodOpti",
+        "Automated cherry pick of #129404: fix: killPodOpti",
+        "Automated cherry pick of #130164: Deflake the PodR"
+      ],
+      "relevant_ids": [
+        "gh-kubernetes-134858"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "gh-kubernetes-129355-chunk-0-of-8",
+      "query_text": "[evented pleg]: using real-time container events for pod state determination",
+      "retrieved_ids": [
+        "[evented pleg]: using real-time container events f",
+        "[evented pleg]: using real-time container events f",
+        "[evented pleg]: using real-time container events f"
+      ],
+      "relevant_ids": [
+        "gh-kubernetes-129355-chunk-0-of-8"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "gh-kubernetes-131024-chunk-0-of-3",
+      "query_text": "kubelet: Fix pod resizing is too slow when using evented PLEG",
+      "retrieved_ids": [
+        "kubelet: Fix pod resizing is too slow when using e",
+        "kubelet: Fix pod resizing is too slow when using e",
+        "kubelet: Fix pod resizing is too slow when using e"
+      ],
+      "relevant_ids": [
+        "gh-kubernetes-131024-chunk-0-of-3"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "gh-kubernetes-134857",
+      "query_text": "Automated cherry pick of #129404: fix: killPodOptions support JSON serialization",
+      "retrieved_ids": [
+        "Automated cherry pick of #129404: fix: killPodOpti",
+        "Automated cherry pick of #129404: fix: killPodOpti",
+        "Automated cherry pick of #130164: Deflake the PodR"
+      ],
+      "relevant_ids": [
+        "gh-kubernetes-134857"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    },
+    {
+      "query_id": "gh-kubernetes-137895-chunk-0-of-8",
+      "query_text": "EKS 1.34  DaemonSet Controller created a lot of pod during node deletion",
+      "retrieved_ids": [
+        "EKS 1.34  DaemonSet Controller created a lot of po",
+        "EKS 1.34  DaemonSet Controller created a lot of po",
+        "EKS 1.34  DaemonSet Controller created a lot of po"
+      ],
+      "relevant_ids": [
+        "gh-kubernetes-137895-chunk-0-of-8"
+      ],
+      "reciprocal_rank": 0.0,
+      "recall_at_1": 0.0,
+      "recall_at_3": 0.0,
+      "recall_at_5": 0.0
+    }
+  ]
+}
