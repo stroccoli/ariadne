@@ -8,7 +8,7 @@
 
 ## Context
 
-Ariadne's RAG layer retrieves incident pattern documents from a vector store and injects the top-3 results into the analyzer prompt. The knowledge base is `data/incident_knowledge.json` — 22 documents, ~1 KB each.
+Ariadne's RAG layer retrieves incident pattern documents from a vector store and injects the top-3 results into the analyzer prompt. The knowledge base is populated by `scripts/ingest_pipeline.py`, which collects data from GitHub issues and public post-mortems, preprocesses, chunks, and indexes them as structured `IngestionDocument` objects.
 
 Local development already uses Qdrant via Docker Compose (`docker-compose.yml`, ports 6333/6334). The `QdrantVectorStore` implementation uses hybrid search: `QDRANT_DENSE_WEIGHT=0.65`, `QDRANT_KEYWORD_WEIGHT=0.35`, `QDRANT_CANDIDATE_LIMIT=8`, `QDRANT_SEARCH_LIMIT=3`.
 
@@ -75,12 +75,12 @@ Pinecone is a managed vector database. Free tier: 1 index, 100K vectors, no expi
 **Positive:**
 - Local development and production use the same `QdrantVectorStore` class — no separate code path.
 - Hybrid search is already configured and tested locally before being promoted to cloud.
-- The indexing script (`scripts/index_data.py`) works identically against both endpoints.
+- The ingestion pipeline (`scripts/ingest_pipeline.py`) works identically against both endpoints.
 - Qdrant Cloud persists state; no re-indexing on API restart.
 
 **Negative:**
 - Production depends on an external managed service that could change pricing or availability.
-- Adding new knowledge documents requires running `python scripts/index_data.py` with `QDRANT_URL` and `QDRANT_API_KEY` set — no background indexing pipeline.
+- Re-indexing requires running `python scripts/ingest_pipeline.py` with `QDRANT_URL` and `QDRANT_API_KEY` set — no background indexing endpoint.
 - The 1 GB free tier, while ample now, would be exhausted at ~40,000 documents indexed at 768 dimensions.
 
 ---

@@ -79,5 +79,6 @@ def run_retrieval(state: IncidentState) -> IncidentState:
     logger.debug("[retrieve] returned %d document(s)", len(documents))
 
     state.context = documents
+    state.retrieved_doc_titles = [doc.split("\n")[0] for doc in documents]
     state.retrieval_attempts += 1
     return state

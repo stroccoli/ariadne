@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import os
 import shutil
-import subprocess
 import time
 import unittest
 from pathlib import Path
@@ -14,6 +13,48 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 from ariadne.core.agents.rag import retrieve_context
 from ariadne.core.config import get_embedding_client, get_vector_store
+from ariadne.core.retrieval.document import IngestionDocument
+
+
+# Small set of IngestionDocument fixtures covering different incident types.
+_FIXTURE_DOCS = [
+    IngestionDocument(
+        id="fixture-db-pool",
+        title="Database pool exhaustion pattern",
+        content=(
+            "Connection pool exhaustion often shows up as queued requests, timeout errors, "
+            "and a sudden increase in active sessions. Validate pool usage, slow query volume, "
+            "and whether recent traffic or retry storms pushed concurrency past configured limits."
+        ),
+        source="manual",
+        severity="high",
+        service="checkout-api",
+    ),
+    IngestionDocument(
+        id="fixture-dependency-outage",
+        title="Dependency outage with connection refusal",
+        content=(
+            "Connection refused, upstream 503 responses, and circuit breaker openings usually "
+            "point to a dependency outage or an unreachable upstream. Check dependency health, "
+            "network reachability, and whether fallback logic is masking the blast radius."
+        ),
+        source="manual",
+        severity="critical",
+        service="auth-gateway",
+    ),
+    IngestionDocument(
+        id="fixture-oom-restart",
+        title="Kubernetes OOMKilled restart sequence",
+        content=(
+            "Pods that repeatedly restart with OOMKilled status usually exceed container memory "
+            "limits rather than failing application health checks first. Confirm restart count, "
+            "memory RSS growth, and whether new traffic patterns or payload sizes changed recently."
+        ),
+        source="manual",
+        severity="high",
+        service="report-worker",
+    ),
+]
 
 
 class RagSmokeTests(unittest.TestCase):
@@ -52,7 +93,8 @@ class RagSmokeTests(unittest.TestCase):
         return None
 
     @classmethod
-    def _run_command(cls, command: list[str], check: bool = True, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+    def _run_command(cls, command: list[str], check: bool = True, env: dict[str, str] | None = None):
+        import subprocess
         return subprocess.run(
             command,
             cwd=REPO_ROOT,
@@ -92,14 +134,12 @@ class RagSmokeTests(unittest.TestCase):
             }
         )
 
-        self._run_command(
-            [sys.executable, "scripts/index_data.py", "--dataset", "data/incident_knowledge.json"],
-            env=env,
-        )
-
         os.environ.update(env)
         get_vector_store.cache_clear()
         get_embedding_client.cache_clear()
+
+        store = get_vector_store()
+        store.index_documents(_FIXTURE_DOCS)
 
         context = retrieve_context(
             "ERROR postgres connection pool exhausted after repeated retries and active sessions are saturated"
