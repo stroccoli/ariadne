@@ -94,6 +94,7 @@ Ariadne supports incident responders, on-call engineers, and SREs who need a fas
 | Pipeline | `ariadne/core/graph.py` | LangGraph `StateGraph` — 4 nodes, conditional retry routing |
 | Classifier | `ariadne/core/agents/classifier.py` | LLM call → `incident_type` + `classification_confidence` |
 | RAG retriever | `ariadne/core/agents/rag.py` | Embed query → Qdrant hybrid search → top-3 context docs |
+| Ingestion pipeline | `scripts/ingest_pipeline.py` | Collect → preprocess → chunk → embed → index into Qdrant |
 | Analyzer | `ariadne/core/agents/analyzer.py` | LLM call with context → `root_cause`, `recommended_actions`, `analysis_confidence` |
 | LLM providers | `ariadne/core/integrations/llm/` | OpenAI, Ollama, Gemini — swappable via `LLM_PROVIDER` |
 | Embeddings | `ariadne/core/integrations/embeddings/` | OpenAI, Ollama, Gemini, local hash — swappable |
@@ -164,7 +165,11 @@ pip install -e .
 docker compose up -d
 
 # 6. Index the knowledge base into Qdrant
-python scripts/index_data.py
+# Post-mortems only (no GitHub token needed):
+python scripts/ingest_pipeline.py --mode=postmortems-only
+
+# Or full pipeline (GitHub issues + post-mortems):
+python scripts/ingest_pipeline.py --mode=full --github-token=ghp_...
 
 # 7. Start the API
 uvicorn ariadne.api.main:app --reload --port 8000
@@ -190,17 +195,39 @@ Interactive API docs: `http://localhost:8000/docs`
 
 ### Re-indexing the knowledge base
 
-Run after editing `data/incident_knowledge.json`:
+The ingestion pipeline collects incident data from GitHub issues and public post-mortems, preprocesses and chunks the documents, embeds them, and indexes into Qdrant. Intermediate results are checkpointed under `data/pipeline/`.
 
 ```bash
-# Local Qdrant (docker compose must be running)
-python scripts/index_data.py
+# Post-mortems only (no token needed, collects from danluu/post-mortems)
+python scripts/ingest_pipeline.py --mode=postmortems-only
+
+# Full pipeline (GitHub issues + post-mortems)
+python scripts/ingest_pipeline.py --mode=full --github-token=ghp_...
+
+# Re-index from existing checkpoints (skip collection)
+python scripts/ingest_pipeline.py --mode=index
+
+# Evaluate retrieval quality only
+python scripts/ingest_pipeline.py --mode=eval
+
+# Force re-run, ignoring all checkpoints
+python scripts/ingest_pipeline.py --mode=full --force --github-token=ghp_...
 
 # Qdrant Cloud (production)
 QDRANT_URL=https://<cluster>.qdrant.io:6333 \
 QDRANT_API_KEY=<key> \
-python scripts/index_data.py
+python scripts/ingest_pipeline.py --mode=full --github-token=ghp_...
 ```
+
+| Flag | Default | Description |
+|---|---|---|
+| `--mode` | `postmortems-only` | `full`, `postmortems-only`, `index`, or `eval` |
+| `--github-token` | — | GitHub PAT (required for `full` mode) |
+| `--max-per-repo` | 200 | Max issues per GitHub repo |
+| `--max-postmortems` | 800 | Max post-mortems to collect |
+| `--chunk-preset` | `medium` | Chunking preset: `small`, `medium`, `large`, `sentence` |
+| `--embedding-batch-size` | 32 | Texts per embedding batch |
+| `--force` | off | Ignore checkpoints and re-run all stages |
 
 ### Frontend (optional)
 
@@ -377,7 +404,7 @@ These items were deliberately deferred to keep the project shipping rather than 
 
 2. **Streaming response for `POST /analyze`** — The API currently returns the full result after the entire pipeline finishes (~3–6s). Server-sent events (SSE) would allow the UI to show partial results as each node completes, improving perceived latency significantly.
 
-3. **Background knowledge-base reindexing** — `scripts/index_data.py` must currently be run manually after any update to `data/incident_knowledge.json`. A `POST /admin/reindex` endpoint would make updates self-service.
+3. **Ingestion pipeline improvements** — The current `scripts/ingest_pipeline.py` collects from GitHub issues and public post-mortems, with checkpointing and retrieval evaluation. A `POST /admin/reindex` endpoint would make re-indexing self-service without CLI access.
 
 4. **Metadata filters in retrieval** — The Qdrant query currently uses only dense + BM25 similarity. Filtering by `incident_type` (from the classifier output) before retrieval runs would improve precision for the known taxonomy.
 

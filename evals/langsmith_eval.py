@@ -56,8 +56,11 @@ DEV_SAMPLE_IDS: tuple[str, ...] = (
     "unknown_worker_dependency_vs_disk",
 )
 
-# For each sample: the doc titles (exactly as stored in incident_knowledge.json) that a
-# well-functioning retriever should surface in the top-k results.
+# For each sample: expected relevant doc titles for recall@k.
+# NOTE: These titles were curated for the original 20-doc incident_knowledge.json
+# dataset. After migrating to the new IngestionDocument pipeline (GitHub issues +
+# postmortems), this ground truth must be re-curated with titles from the new
+# corpus. Until then, recall@k scores may be inaccurate.
 _GROUND_TRUTH: dict[str, list[str]] = {
     "timeout_checkout_pricing": [
         "Checkout timeouts caused by a slow dependency",
