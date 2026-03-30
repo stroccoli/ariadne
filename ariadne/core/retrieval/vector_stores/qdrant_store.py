@@ -17,6 +17,7 @@ from qdrant_client.http.models import (
     PointStruct,
     VectorParams,
 )
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 from ariadne.core.integrations.embeddings.base import EmbeddingClient
 from ariadne.core.retrieval.document import IngestionDocument
@@ -205,11 +206,47 @@ class QdrantVectorStore(VectorStore):
             batch = points[i : i + self.upsert_batch_size]
             batch_num = i // self.upsert_batch_size + 1
             logger.debug("Upserting batch %d/%d (%d points)", batch_num, n_batches, len(batch))
-            self.client.upsert(
-                collection_name=self.collection_name,
-                points=batch,
-                wait=True,
-            )
+            self._upsert_with_retry(batch)
+
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
+    def _upsert_with_retry(self, batch: list[PointStruct]) -> None:
+        self.client.upsert(
+            collection_name=self.collection_name,
+            points=batch,
+            wait=True,
+        )
+
+    def _doc_point_id(self, doc: IngestionDocument) -> str:
+        return str(uuid.uuid5(uuid.NAMESPACE_URL, f"{self.collection_name}:{doc.id}"))
+
+    def filter_new_docs(self, docs: list[IngestionDocument]) -> list[IngestionDocument]:
+        """Return only docs not already present in the collection."""
+        if not docs:
+            return []
+
+        if not self.client.collection_exists(self.collection_name):
+            return docs
+
+        id_to_doc = {self._doc_point_id(doc): doc for doc in docs}
+        all_ids = list(id_to_doc.keys())
+
+        existing_ids: set[str] = set()
+        batch_size = 100
+        for i in range(0, len(all_ids), batch_size):
+            batch_ids = all_ids[i : i + batch_size]
+            try:
+                results = self.client.retrieve(
+                    collection_name=self.collection_name,
+                    ids=batch_ids,
+                    with_payload=False,
+                    with_vectors=False,
+                )
+                existing_ids.update(str(r.id) for r in results)
+            except Exception as exc:
+                logger.warning("Failed to check existing docs (batch %d): %s", i // batch_size, exc)
+
+        new_docs = [doc for pid, doc in id_to_doc.items() if pid not in existing_ids]
+        return new_docs
 
     def search(self, query: str) -> list[str]:
         query_vector = self.embedding_client.embed_text(query)

@@ -94,7 +94,7 @@ Ariadne supports incident responders, on-call engineers, and SREs who need a fas
 | Pipeline | `ariadne/core/graph.py` | LangGraph `StateGraph` — 4 nodes, conditional retry routing |
 | Classifier | `ariadne/core/agents/classifier.py` | LLM call → `incident_type` + `classification_confidence` |
 | RAG retriever | `ariadne/core/agents/rag.py` | Embed query → Qdrant hybrid search → top-3 context docs |
-| Ingestion pipeline | `scripts/ingest_pipeline.py` | Collect → preprocess → chunk → embed → index into Qdrant |
+| Ingestion pipeline | DVC pipeline (dvc.yaml) | Collect → preprocess → chunk → embed → index into Qdrant |
 | Analyzer | `ariadne/core/agents/analyzer.py` | LLM call with context → `root_cause`, `recommended_actions`, `analysis_confidence` |
 | LLM providers | `ariadne/core/integrations/llm/` | OpenAI, Ollama, Gemini — swappable via `LLM_PROVIDER` |
 | Embeddings | `ariadne/core/integrations/embeddings/` | OpenAI, Ollama, Gemini, local hash — swappable |
@@ -105,7 +105,8 @@ Full diagram and ADR index → [docs/architecture.md](docs/architecture.md)
 
 ---
 
-## Stack
+<details>
+<summary><strong>Stack</strong></summary>
 
 | Component | Technology | Why | Considered |
 |---|---|---|---|
@@ -120,6 +121,8 @@ Full diagram and ADR index → [docs/architecture.md](docs/architecture.md)
 | Frontend hosting | Fly.io same-origin / Vercel | Next.js static export served from Docker image; Vercel optional for standalone | — |
 | Observability | LangSmith | Per-run traces, token counts, per-node latency | LangFuse |
 | Error tracking | Sentry | 5xx errors only, 10% trace sampling, free tier | — |
+
+</details>
 
 ---
 
@@ -166,10 +169,12 @@ docker compose up -d
 
 # 6. Index the knowledge base into Qdrant
 # Post-mortems only (no GitHub token needed):
-python scripts/ingest_pipeline.py --mode=postmortems-only
+dvc repro
 
 # Or full pipeline (GitHub issues + post-mortems):
-python scripts/ingest_pipeline.py --mode=full --github-token=ghp_...
+export GITHUB_TOKEN=ghp_...
+dvc repro collect_github
+dvc repro
 
 # 7. Start the API
 uvicorn ariadne.api.main:app --reload --port 8000
@@ -195,39 +200,7 @@ Interactive API docs: `http://localhost:8000/docs`
 
 ### Re-indexing the knowledge base
 
-The ingestion pipeline collects incident data from GitHub issues and public post-mortems, preprocesses and chunks the documents, embeds them, and indexes into Qdrant. Intermediate results are checkpointed under `data/pipeline/`.
-
-```bash
-# Post-mortems only (no token needed, collects from danluu/post-mortems)
-python scripts/ingest_pipeline.py --mode=postmortems-only
-
-# Full pipeline (GitHub issues + post-mortems)
-python scripts/ingest_pipeline.py --mode=full --github-token=ghp_...
-
-# Re-index from existing checkpoints (skip collection)
-python scripts/ingest_pipeline.py --mode=index
-
-# Evaluate retrieval quality only
-python scripts/ingest_pipeline.py --mode=eval
-
-# Force re-run, ignoring all checkpoints
-python scripts/ingest_pipeline.py --mode=full --force --github-token=ghp_...
-
-# Qdrant Cloud (production)
-QDRANT_URL=https://<cluster>.qdrant.io:6333 \
-QDRANT_API_KEY=<key> \
-python scripts/ingest_pipeline.py --mode=full --github-token=ghp_...
-```
-
-| Flag | Default | Description |
-|---|---|---|
-| `--mode` | `postmortems-only` | `full`, `postmortems-only`, `index`, or `eval` |
-| `--github-token` | — | GitHub PAT (required for `full` mode) |
-| `--max-per-repo` | 200 | Max issues per GitHub repo |
-| `--max-postmortems` | 800 | Max post-mortems to collect |
-| `--chunk-preset` | `medium` | Chunking preset: `small`, `medium`, `large`, `sentence` |
-| `--embedding-batch-size` | 32 | Texts per embedding batch |
-| `--force` | off | Ignore checkpoints and re-run all stages |
+See the [Ingestion pipeline](#ingestion-pipeline) section below for full DVC-based and legacy CLI instructions.
 
 ### Frontend (optional)
 
@@ -241,6 +214,73 @@ npm run dev
 ```
 
 ---
+
+## Ingestion pipeline
+
+The ingestion pipeline collects incident data (public post-mortems + GitHub bug issues), preprocesses and chunks the documents, embeds them, and indexes into Qdrant. It is managed with **[DVC](https://dvc.org)** so that stages only re-run when their inputs or parameters change — giving you reproducible, versioned data pipelines.
+
+```
+collect_postmortems ─┐
+                     ├─► preprocess ─► chunk ─► index ─► evaluate
+collect_github ──────┘
+```
+
+### DVC pipeline (recommended)
+
+```bash
+# Install DVC (once)
+pip install dvc
+
+# Run the full pipeline — postmortems only (no token needed)
+dvc repro
+
+# Check which stages are stale before running
+dvc status
+
+# Run with GitHub issues as well (requires GITHUB_TOKEN)
+export GITHUB_TOKEN=ghp_...
+dvc repro collect_github          # collect GitHub issues
+dvc repro                         # run remaining stages
+
+# Change a parameter and re-run only the affected stages
+# Edit params.yaml, then:
+dvc repro                         # DVC figures out what changed
+
+# Force re-run all stages regardless of cache
+dvc repro --force
+
+# Run only the evaluation stage
+dvc repro evaluate
+
+# Compare metrics between the current run and the previous commit
+dvc metrics diff
+
+# Visualise metric history across git commits
+dvc plots show data/pipeline/eval_report.json
+```
+
+**Pipeline parameters** — edit `params.yaml` to change defaults:
+
+```yaml
+ingest:
+  max_postmortems: 800       # post-mortems to collect
+  max_per_repo: 200          # GitHub issues per repo
+  chunk_preset: medium       # small | medium | large | sentence
+  embedding_batch_size: 32   # texts per embedding batch
+```
+
+**Pipeline outputs** tracked under `data/pipeline/`:
+
+| File | Stage | Contents |
+|---|---|---|
+| `raw_postmortems.json` | collect_postmortems | Raw post-mortem documents |
+| `raw_github.json` | collect_github | Raw GitHub issue documents |
+| `clean_docs.json` | preprocess | Cleaned, deduplicated documents |
+| `preprocess_report.json` | preprocess | Stats: input, output, rejection reasons |
+| `chunks_medium.json` | chunk | Chunked documents (preset-named) |
+| `eval_report.json` | evaluate | MRR, Recall@k per query |
+
+
 
 ## Running evaluations
 
@@ -298,7 +338,8 @@ For technical details:
 
 ---
 
-## API reference
+<details>
+<summary><strong>API reference</strong></summary>
 
 ### `POST /analyze`
 
@@ -394,9 +435,12 @@ curl https://ariadne-api-polished-shape-2678.fly.dev/ready
 # → {"status": "ready"}
 ```
 
+</details>
+
 ---
 
-## Roadmap
+<details>
+<summary><strong>Roadmap</strong></summary>
 
 These items were deliberately deferred to keep the project shipping rather than building:
 
@@ -404,15 +448,18 @@ These items were deliberately deferred to keep the project shipping rather than 
 
 2. **Streaming response for `POST /analyze`** — The API currently returns the full result after the entire pipeline finishes (~3–6s). Server-sent events (SSE) would allow the UI to show partial results as each node completes, improving perceived latency significantly.
 
-3. **Ingestion pipeline improvements** — The current `scripts/ingest_pipeline.py` collects from GitHub issues and public post-mortems, with checkpointing and retrieval evaluation. A `POST /admin/reindex` endpoint would make re-indexing self-service without CLI access.
+3. **Ingestion pipeline improvements** — The current DVC pipeline collects from GitHub issues and public post-mortems, with checkpointing and retrieval evaluation. A `POST /admin/reindex` endpoint would make re-indexing self-service without CLI access.
 
 4. **Metadata filters in retrieval** — The Qdrant query currently uses only dense + BM25 similarity. Filtering by `incident_type` (from the classifier output) before retrieval runs would improve precision for the known taxonomy.
 
 5. **Confidence calibration** — The current `confidence` score is self-reported by the LLM and not calibrated against ground-truth outcomes. A Platt scaling pass over eval results would make the score meaningful as a triage signal.
 
+</details>
+
 ---
 
-## Contributing
+<details>
+<summary><strong>Contributing</strong></summary>
 
 ```bash
 # Run unit tests (no external services required)
@@ -426,6 +473,8 @@ python evals/run_ab_test.py
 ```
 
 Keep PRs focused — don't mix feature additions with refactors. If you're adding a new LLM provider, follow the existing pattern in `ariadne/core/integrations/llm/`: implement `LLMClient`, wire it in `config.py`, add unit tests.
+
+</details>
 
 ---
 

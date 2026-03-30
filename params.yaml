@@ -1,0 +1,5 @@
+ingest:
+  max_postmortems: 800
+  max_per_repo: 200
+  chunk_preset: medium
+  embedding_batch_size: 32

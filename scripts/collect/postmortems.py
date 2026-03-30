@@ -4,10 +4,12 @@ import json
 import logging
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
 import requests
+from bs4 import BeautifulSoup
 
 from ariadne.core.retrieval.document import IngestionDocument
 
@@ -24,6 +26,10 @@ _LINE_PATTERN = re.compile(
     r"\(([^)]+)\)",
     re.MULTILINE,
 )
+
+MAX_CONTENT_CHARS = 15_000
+FETCH_TIMEOUT = 10
+FETCH_MAX_WORKERS = 5
 
 
 class PostmortemsCollector:
@@ -46,10 +52,8 @@ class PostmortemsCollector:
         entries = self._parse_readme(readme_text)
         logger.info("Found %d entries in README", len(entries))
 
-        docs = [
-            self._entry_to_document(i, company, title, url)
-            for i, (company, title, url) in enumerate(entries[:max_entries])
-        ]
+        entries = entries[:max_entries]
+        docs = self._fetch_all_content(entries)
 
         logger.info("Created %d IngestionDocuments from post-mortems", len(docs))
 
@@ -57,6 +61,96 @@ class PostmortemsCollector:
             self._save(docs, output_path)
 
         return docs
+
+    def _fetch_all_content(
+        self, entries: list[tuple[str, str, str]]
+    ) -> list[IngestionDocument]:
+        """Fetch real content for each entry using a thread pool, with fallback to title."""
+        docs: list[IngestionDocument] = [None] * len(entries)  # type: ignore[list-item]
+        fetched = 0
+        failed = 0
+
+        def _fetch_one(idx: int, company: str, title: str, url: str) -> tuple[int, IngestionDocument]:
+            content = self._try_fetch_url_content(url)
+            if content:
+                return idx, self._build_document(idx, company, title, url, content)
+            return idx, self._build_document(idx, company, title, url, content=None)
+
+        with ThreadPoolExecutor(max_workers=FETCH_MAX_WORKERS) as executor:
+            futures = {
+                executor.submit(_fetch_one, i, company, title, url): i
+                for i, (company, title, url) in enumerate(entries)
+            }
+            for future in as_completed(futures):
+                idx, doc = future.result()
+                docs[idx] = doc
+                if doc.content != doc.title and len(doc.content) > 200:
+                    fetched += 1
+                else:
+                    failed += 1
+
+        logger.info(
+            "Content fetch complete: %d fetched, %d fell back to title",
+            fetched,
+            failed,
+        )
+        return docs
+
+    def _try_fetch_url_content(self, url: str) -> str | None:
+        """Try to fetch and extract text content from a URL. Returns None on failure."""
+        try:
+            resp = self.session.get(url, timeout=FETCH_TIMEOUT, allow_redirects=True)
+            if resp.status_code != 200:
+                return None
+
+            content_type = resp.headers.get("content-type", "")
+            if "html" not in content_type and "text" not in content_type:
+                return None
+
+            soup = BeautifulSoup(resp.text, "lxml")
+
+            # Remove noisy elements
+            for tag in soup(["script", "style", "nav", "footer", "header", "aside", "form"]):
+                tag.decompose()
+
+            # Prefer <article> or <main>, fallback to <body>
+            container = soup.find("article") or soup.find("main") or soup.find("body")
+            if container is None:
+                return None
+
+            text = container.get_text(separator="\n", strip=True)
+            text = re.sub(r"\n{3,}", "\n\n", text)
+
+            if len(text) < 100:
+                return None
+
+            return text[:MAX_CONTENT_CHARS]
+        except Exception:
+            return None
+
+    def _build_document(
+        self, index: int, company: str, title: str, url: str, content: str | None
+    ) -> IngestionDocument:
+        if content:
+            full_content = f"{company + ': ' if company else ''}{title}\n\n{content}" if company else f"{title}\n\n{content}"
+        elif company:
+            full_content = f"{company} incident: {title}"
+        else:
+            full_content = title
+        service = company.lower().replace(" ", "_") if company else ""
+        tags = _extract_tags_from_title(title)
+
+        return IngestionDocument(
+            id=f"pm-{index:05d}",
+            title=title,
+            content=full_content,
+            source="postmortem",
+            source_url=url,
+            tags=tags,
+            severity="unknown",
+            service=service,
+            created_at=None,
+        )
 
     def _fetch_readme(self) -> str:
         response = self.session.get(POSTMORTEMS_README_URL, timeout=30)
@@ -78,29 +172,6 @@ class PostmortemsCollector:
             entries.append((company, title, url))
 
         return entries
-
-    def _entry_to_document(
-        self, index: int, company: str, title: str, url: str
-    ) -> IngestionDocument:
-        if company:
-            content = f"{company} incident: {title}"
-        else:
-            content = title
-        service = company.lower().replace(" ", "_") if company else ""
-
-        tags = _extract_tags_from_title(title)
-
-        return IngestionDocument(
-            id=f"pm-{index:05d}",
-            title=title,
-            content=content,
-            source="postmortem",
-            source_url=url,
-            tags=tags,
-            severity="unknown",
-            service=service,
-            created_at=None,
-        )
 
     def _save(self, docs: list[IngestionDocument], path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)

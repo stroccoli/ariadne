@@ -1,0 +1,21 @@
+schema: '2.0'
+stages:
+  collect_postmortems:
+    cmd: python scripts/stages/collect_postmortems.py
+    deps:
+    - path: scripts/collect/postmortems.py
+      hash: md5
+      md5: 0520fa6691d0b1be5f53e2aced105f88
+      size: 7114
+    - path: scripts/stages/collect_postmortems.py
+      hash: md5
+      md5: a48a48a029d0a043c66eca79f0420da2
+      size: 754
+    params:
+      params.yaml:
+        ingest.max_postmortems: 800
+    outs:
+    - path: data/pipeline/raw_postmortems.json
+      hash: md5
+      md5: d751713988987e9331980363e24189ce
+      size: 2

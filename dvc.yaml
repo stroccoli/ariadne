@@ -1,0 +1,62 @@
+stages:
+  collect_postmortems:
+    cmd: python scripts/stages/collect_postmortems.py
+    deps:
+      - scripts/collect/postmortems.py
+      - scripts/stages/collect_postmortems.py
+    params:
+      - ingest.max_postmortems
+    outs:
+      - data/pipeline/raw_postmortems.json
+
+  collect_github:
+    cmd: python scripts/stages/collect_github.py
+    deps:
+      - scripts/collect/github_issues.py
+      - scripts/stages/collect_github.py
+    params:
+      - ingest.max_per_repo
+    outs:
+      - data/pipeline/raw_github.json:
+          persist: true  # optional stage; don't fail pipeline if missing
+
+  preprocess:
+    cmd: python scripts/stages/preprocess.py
+    deps:
+      - data/pipeline/raw_postmortems.json
+      - ariadne/core/retrieval/preprocessing.py
+      - scripts/stages/preprocess.py
+    outs:
+      - data/pipeline/clean_docs.json
+    metrics:
+      - data/pipeline/preprocess_report.json:
+          cache: false
+
+  chunk:
+    cmd: python scripts/stages/chunk.py
+    deps:
+      - data/pipeline/clean_docs.json
+      - ariadne/core/retrieval/chunking.py
+      - scripts/stages/chunk.py
+    params:
+      - ingest.chunk_preset
+    outs:
+      - data/pipeline/chunks_medium.json
+
+  index:
+    cmd: python scripts/stages/index.py
+    deps:
+      - data/pipeline/chunks_medium.json
+      - ariadne/core/retrieval/vector_stores/qdrant_store.py
+      - scripts/stages/index.py
+    params:
+      - ingest.embedding_batch_size
+
+  evaluate:
+    cmd: python scripts/stages/evaluate.py
+    deps:
+      - data/pipeline/chunks_medium.json
+      - scripts/stages/evaluate.py
+    metrics:
+      - data/pipeline/eval_report.json:
+          cache: false

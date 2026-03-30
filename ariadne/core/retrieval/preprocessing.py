@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import re
+from dataclasses import dataclass, field
+from pathlib import Path
 
 from ariadne.core.retrieval.document import (
     IngestionDocument,
@@ -133,37 +136,72 @@ def deduplicate_documents(
     return unique, n_removed
 
 
+@dataclass
+class PreprocessReport:
+    """Quality report for a preprocessing run."""
+    input_count: int = 0
+    output_count: int = 0
+    rejected_too_short: int = 0
+    rejected_too_long: int = 0
+    rejected_mostly_code: int = 0
+    deduplicated: int = 0
+    rejection_details: dict[str, int] = field(default_factory=dict)
+
+    def summary(self) -> str:
+        lines = [
+            f"Preprocess Report: {self.input_count} → {self.output_count} docs",
+            f"  Rejected (too_short):    {self.rejected_too_short}",
+            f"  Rejected (too_long):     {self.rejected_too_long}",
+            f"  Rejected (mostly_code):  {self.rejected_mostly_code}",
+            f"  Deduplicated:            {self.deduplicated}",
+        ]
+        return "\n".join(lines)
+
+    def to_dict(self) -> dict:
+        return {
+            "input_count": self.input_count,
+            "output_count": self.output_count,
+            "rejected_too_short": self.rejected_too_short,
+            "rejected_too_long": self.rejected_too_long,
+            "rejected_mostly_code": self.rejected_mostly_code,
+            "deduplicated": self.deduplicated,
+            "rejection_details": self.rejection_details,
+        }
+
+    def save(self, path: Path) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(self.to_dict(), indent=2), encoding="utf-8")
+        logger.info("Preprocess report saved to %s", path)
+
+
 def preprocess_documents(
     docs: list[IngestionDocument],
     *,
     verbose: bool = True,
-) -> list[IngestionDocument]:
-    n_input = len(docs)
+) -> tuple[list[IngestionDocument], PreprocessReport]:
+    report = PreprocessReport(input_count=len(docs))
     cleaned = [clean_document(doc) for doc in docs]
+
     filtered: list[IngestionDocument] = []
-    rejection_reasons: dict[str, int] = {}
     for doc in cleaned:
         ok, reason = passes_quality_filter(doc)
         if ok:
             filtered.append(doc)
         else:
-            rejection_reasons[reason.split("(")[0].strip()] = (
-                rejection_reasons.get(reason.split("(")[0].strip(), 0) + 1
-            )
-    n_after_filter = len(filtered)
+            category = reason.split("(")[0].strip()
+            report.rejection_details[category] = report.rejection_details.get(category, 0) + 1
+            if category == "too_short":
+                report.rejected_too_short += 1
+            elif category == "too_long":
+                report.rejected_too_long += 1
+            elif category == "mostly_code":
+                report.rejected_mostly_code += 1
+
     unique, n_removed = deduplicate_documents(filtered)
-    n_final = len(unique)
+    report.deduplicated = n_removed
+    report.output_count = len(unique)
 
     if verbose:
-        logger.info(
-            "Preprocessing complete: %d → %d (filtered=%d, deduped=%d)",
-            n_input,
-            n_final,
-            n_input - n_after_filter,
-            n_removed,
-        )
-        if rejection_reasons:
-            for reason, count in sorted(rejection_reasons.items(), key=lambda x: -x[1]):
-                logger.info("  Rejected (%s): %d docs", reason, count)
+        logger.info(report.summary())
 
-    return unique
+    return unique, report
