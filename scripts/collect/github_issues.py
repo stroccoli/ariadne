@@ -61,15 +61,49 @@ class GitHubIssuesCollector:
         self,
         max_per_repo: int = 200,
         output_path: Path | None = None,
+        checkpoint_path: Path | None = None,
     ) -> list[IngestionDocument]:
         all_docs: list[IngestionDocument] = []
+        already_done_repos: set[str] = set()
+
+        # Resume from partial checkpoint if available
+        if checkpoint_path is not None and checkpoint_path.exists():
+            try:
+                partial = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+                all_docs = [IngestionDocument.model_validate(d) for d in partial["docs"]]
+                already_done_repos = set(partial.get("completed_repos", []))
+                logger.info(
+                    "Resuming from checkpoint: %d docs already collected, %d repos done",
+                    len(all_docs),
+                    len(already_done_repos),
+                )
+            except Exception as exc:
+                logger.warning("Could not load checkpoint %s: %s — starting fresh", checkpoint_path, exc)
 
         for repo in self.repos:
+            if repo in already_done_repos:
+                logger.info("Skipping %s (already in checkpoint)", repo)
+                continue
+
             logger.info("Collecting issues from %s (max=%d)", repo, max_per_repo)
             try:
                 docs = self._collect_repo(repo, max_per_repo)
                 logger.info("  → %d issues collected from %s", len(docs), repo)
+                if len(docs) < max_per_repo * 0.8:
+                    logger.warning(
+                        "Shortfall from %s: got %d/%d requested (rate limit or low issue count)",
+                        repo,
+                        len(docs),
+                        max_per_repo,
+                    )
                 all_docs.extend(docs)
+                already_done_repos.add(repo)
+
+                # Save partial checkpoint after each successful repo
+                if checkpoint_path is not None:
+                    self._save_partial_checkpoint(
+                        all_docs, already_done_repos, checkpoint_path
+                    )
             except requests.HTTPError as exc:
                 logger.warning("Failed to collect %s: %s", repo, exc)
 
@@ -126,7 +160,7 @@ class GitHubIssuesCollector:
         response = self.session.get(url, params=params, timeout=30)
 
         remaining = int(response.headers.get("X-RateLimit-Remaining", 9999))
-        if remaining < 10:
+        if remaining < 20:
             reset_at = int(response.headers.get("X-RateLimit-Reset", time.time() + 60))
             wait_seconds = max(0, reset_at - int(time.time())) + 5
             logger.warning("GitHub rate limit low (%d remaining). Waiting %ds", remaining, wait_seconds)
@@ -168,6 +202,20 @@ class GitHubIssuesCollector:
             service=service,
             created_at=created_at,
         )
+
+    def _save_partial_checkpoint(
+        self,
+        docs: list[IngestionDocument],
+        completed_repos: set[str],
+        path: Path,
+    ) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        data = {
+            "completed_repos": sorted(completed_repos),
+            "docs": [doc.model_dump(mode="json") for doc in docs],
+        }
+        path.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
+        logger.debug("Checkpoint saved: %s (%d docs, %d repos done)", path, len(docs), len(completed_repos))
 
     def _respect_rate_limit(self) -> None:
         time.sleep(0.5)

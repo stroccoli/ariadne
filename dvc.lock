@@ -19,3 +19,153 @@ stages:
       hash: md5
       md5: d751713988987e9331980363e24189ce
       size: 2
+  collect:
+    cmd: python scripts/stages/collect.py
+    deps:
+    - path: scripts/collect/github_issues.py
+      hash: md5
+      md5: 2582cec096431c78a93b1f92df82439c
+      size: 8498
+    - path: scripts/collect/postmortems.py
+      hash: md5
+      md5: ddbd3b10f34fd271e6949aaa59d9bd79
+      size: 9127
+    - path: scripts/stages/collect.py
+      hash: md5
+      md5: 52c1d7dbf2f428344a1f7ffdd20c59e7
+      size: 1394
+    params:
+      params.yaml:
+        ingest.max_per_repo: 200
+        ingest.max_postmortems: 800
+    outs:
+    - path: data/datasets/raw_github.json
+      hash: md5
+      md5: 8ec98c06a72db961e4139027544f3944
+      size: 2685011
+    - path: data/datasets/raw_postmortems.json
+      hash: md5
+      md5: 136add76ef1b8ebe2b80ece05793df4d
+      size: 153726
+  preprocess:
+    cmd: python scripts/stages/preprocess.py
+    deps:
+    - path: ariadne/core/retrieval/preprocessing.py
+      hash: md5
+      md5: 7cf9c394bba2ea39ebeb6096ea23d423
+      size: 14968
+    - path: ariadne/core/retrieval/text_utils.py
+      hash: md5
+      md5: fd0bd3009b54d34710e35a1bc187623a
+      size: 1799
+    - path: data/datasets/raw_postmortems.json
+      hash: md5
+      md5: 136add76ef1b8ebe2b80ece05793df4d
+      size: 153726
+    - path: scripts/stages/preprocess.py
+      hash: md5
+      md5: 89a37f1c13352803051a762b2b4a5b3a
+      size: 1007
+    params:
+      params.yaml:
+        ingest.max_document_age_days:
+        ingest.semantic_dedup_threshold: 0.85
+    outs:
+    - path: data/datasets/clean_docs.json
+      hash: md5
+      md5: 030cd95cd58f65b07dc3756d43cbf3d8
+      size: 1231754
+    - path: data/datasets/preprocess_report.json
+      hash: md5
+      md5: 4619f02e0ce2a047ca71feeacefc53bf
+      size: 909
+  chunk:
+    cmd: python scripts/stages/chunk.py
+    deps:
+    - path: ariadne/core/retrieval/chunking.py
+      hash: md5
+      md5: c1bab2b86baeb165741a989d4c08b363
+      size: 4567
+    - path: data/datasets/clean_docs.json
+      hash: md5
+      md5: 030cd95cd58f65b07dc3756d43cbf3d8
+      size: 1231754
+    - path: scripts/stages/chunk.py
+      hash: md5
+      md5: 0d53d6ee06f37e28ce079eeb3c486e4f
+      size: 1035
+    params:
+      params.yaml:
+        ingest.chunk_preset: medium
+    outs:
+    - path: data/datasets/chunks_medium.json
+      hash: md5
+      md5: 0242fb204f631bfa3b4715f2ee54c4bb
+      size: 1856988
+  index:
+    cmd: python scripts/stages/index.py
+    deps:
+    - path: ariadne/core/ingestion.py
+      hash: md5
+      md5: f473f9bbe9659a2449b3f4d9ee0441a0
+      size: 27180
+    - path: ariadne/core/retrieval/vector_stores/qdrant_store.py
+      hash: md5
+      md5: 63144c5450a49952e329807e223661b2
+      size: 17495
+    - path: data/datasets/chunks_medium.json
+      hash: md5
+      md5: 0242fb204f631bfa3b4715f2ee54c4bb
+      size: 1856988
+    - path: scripts/stages/index.py
+      hash: md5
+      md5: ed90becb1095cd2eb3a37f165f7602bc
+      size: 2058
+    params:
+      params.yaml:
+        ingest.embedding_batch_size: 32
+        ingest.embedding_model_check: true
+    outs:
+    - path: data/datasets/index_metrics.json
+      hash: md5
+      md5: f699538853c0bde5ff66e0ef9af7b775
+      size: 85215
+  evaluate:
+    cmd: python scripts/stages/evaluate.py
+    deps:
+    - path: ariadne/core/ingestion.py
+      hash: md5
+      md5: f473f9bbe9659a2449b3f4d9ee0441a0
+      size: 27180
+    - path: ariadne/core/retrieval/pipeline_report.py
+      hash: md5
+      md5: 130fb7a4b1cc488f68a18dee0849a733
+      size: 16916
+    - path: ariadne/core/retrieval/vector_stores/qdrant_store.py
+      hash: md5
+      md5: 63144c5450a49952e329807e223661b2
+      size: 17495
+    - path: data/datasets/chunks_medium.json
+      hash: md5
+      md5: 0242fb204f631bfa3b4715f2ee54c4bb
+      size: 1856988
+    - path: data/datasets/index_metrics.json
+      hash: md5
+      md5: f699538853c0bde5ff66e0ef9af7b775
+      size: 85215
+    - path: data/datasets/preprocess_report.json
+      hash: md5
+      md5: 4619f02e0ce2a047ca71feeacefc53bf
+      size: 909
+    - path: scripts/stages/evaluate.py
+      hash: md5
+      md5: 7f5ca94110ab101c43f42f8fa2f77768
+      size: 1210
+    params:
+      params.yaml:
+        ingest.chunk_preset: medium
+    outs:
+    - path: data/datasets/pipeline_report.json
+      hash: md5
+      md5: c01fc02bcccb1b4c5ef94e56658f5c88
+      size: 2595

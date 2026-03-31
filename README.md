@@ -173,7 +173,6 @@ dvc repro
 
 # Or full pipeline (GitHub issues + post-mortems):
 export GITHUB_TOKEN=ghp_...
-dvc repro collect_github
 dvc repro
 
 # 7. Start the API
@@ -200,7 +199,12 @@ Interactive API docs: `http://localhost:8000/docs`
 
 ### Re-indexing the knowledge base
 
-See the [Ingestion pipeline](#ingestion-pipeline) section below for full DVC-based and legacy CLI instructions.
+```bash
+dvc repro                       # postmortems only
+GITHUB_TOKEN=ghp_... dvc repro  # include GitHub issues
+```
+
+See the [Ingestion pipeline](#ingestion-pipeline) section for details.
 
 ### Frontend (optional)
 
@@ -217,68 +221,49 @@ npm run dev
 
 ## Ingestion pipeline
 
-The ingestion pipeline collects incident data (public post-mortems + GitHub bug issues), preprocesses and chunks the documents, embeds them, and indexes into Qdrant. It is managed with **[DVC](https://dvc.org)** so that stages only re-run when their inputs or parameters change — giving you reproducible, versioned data pipelines.
+Five-stage DVC pipeline — only stale stages re-run. Postmortems always collected; GitHub issues fetched when `GITHUB_TOKEN` is set.
 
+```mermaid
+flowchart LR
+    A["📥 **collect**\npostmortems + GitHub issues"] --> B["🧹 **preprocess**\nclean · dedup · age filter"]
+    B --> C["✂️ **chunk**\nmedium preset"]
+    C --> D["🔢 **index**\nembed → Qdrant upsert"]
+    D --> E["📊 **evaluate**\npipeline_report.json"]
 ```
-collect_postmortems ─┐
-                     ├─► preprocess ─► chunk ─► index ─► evaluate
-collect_github ──────┘
-```
-
-### DVC pipeline (recommended)
 
 ```bash
-# Install DVC (once)
-pip install dvc
-
-# Run the full pipeline — postmortems only (no token needed)
-dvc repro
-
-# Check which stages are stale before running
-dvc status
-
-# Run with GitHub issues as well (requires GITHUB_TOKEN)
-export GITHUB_TOKEN=ghp_...
-dvc repro collect_github          # collect GitHub issues
-dvc repro                         # run remaining stages
-
-# Change a parameter and re-run only the affected stages
-# Edit params.yaml, then:
-dvc repro                         # DVC figures out what changed
-
-# Force re-run all stages regardless of cache
-dvc repro --force
-
-# Run only the evaluation stage
-dvc repro evaluate
-
-# Compare metrics between the current run and the previous commit
-dvc metrics diff
-
-# Visualise metric history across git commits
-dvc plots show data/pipeline/eval_report.json
+dvc repro                       # run full pipeline (postmortems only)
+GITHUB_TOKEN=ghp_... dvc repro  # also collect GitHub issues
+dvc status                      # check stale stages
+dvc metrics diff                # compare report vs previous run
 ```
 
-**Pipeline parameters** — edit `params.yaml` to change defaults:
+Key `params.yaml` knobs: `max_postmortems` (800) · `max_per_repo` (200) · `chunk_preset` (medium) · `embedding_batch_size` (32) · `semantic_dedup_threshold` (0.85)
 
-```yaml
-ingest:
-  max_postmortems: 800       # post-mortems to collect
-  max_per_repo: 200          # GitHub issues per repo
-  chunk_preset: medium       # small | medium | large | sentence
-  embedding_batch_size: 32   # texts per embedding batch
-```
+### Last pipeline run — 2026-03-31
 
-**Pipeline outputs** tracked under `data/pipeline/`:
+| | 📥 collect | 🧹 preprocess | ✂️ chunk | 🔢 index |
+|---|---|---|---|---|
+| **Input** | — | 1,002 raw docs | 922 clean docs | 1,928 chunks |
+| **Output** | 1,002 raw docs | 922 clean docs | 1,928 chunks | 1,928 embedded |
+| **Rejected** | — | 80 (6.1% error · 4.3% dedup · 2.0% semantic) | — | 0 upsert errors |
+| **Time** | — | 19.9 s | < 1 s | 18.6 s · 103.6 docs/s |
 
-| File | Stage | Contents |
-|---|---|---|
-| `raw_postmortems.json` | collect_postmortems | Raw post-mortem documents |
-| `raw_github.json` | collect_github | Raw GitHub issue documents |
-| `clean_docs.json` | preprocess | Cleaned, deduplicated documents |
-| `preprocess_report.json` | preprocess | Stats: input, output, rejection reasons |
-| `chunks_medium.json` | chunk | Chunked documents (preset-named) |
-| `eval_report.json` | evaluate | MRR, Recall@k per query |
+**Corpus**
+
+| Source | Chunks | | Severity | Chunks |
+|---|---|---|---|---|
+| GitHub issues | 1,736 (90%) | | ⚪ unknown | 1,633 |
+| Post-mortems | 192 (10%) | | 🟠 high | 115 |
+| **Total** | **1,928** | | 🟡 medium | 68 |
+| | | | 🟢 low | 94 |
+| | | | 🔴 critical | 18 |
+
+**Top services** · 104 unique · avg 2.09 chunks/doc
+
+`compose` 516 · `vault` 429 · `prometheus` 390 · `kubernetes` 374 · `istio` 25 · `google` 22 · `amazon` 14 · `cloudflare` 12
+
+Full report → [`data/datasets/pipeline_report.json`](data/datasets/pipeline_report.json)
 
 
 
@@ -448,9 +433,7 @@ These items were deliberately deferred to keep the project shipping rather than 
 
 2. **Streaming response for `POST /analyze`** — The API currently returns the full result after the entire pipeline finishes (~3–6s). Server-sent events (SSE) would allow the UI to show partial results as each node completes, improving perceived latency significantly.
 
-3. **Ingestion pipeline improvements** — The current DVC pipeline collects from GitHub issues and public post-mortems, with checkpointing and retrieval evaluation. A `POST /admin/reindex` endpoint would make re-indexing self-service without CLI access.
-
-4. **Metadata filters in retrieval** — The Qdrant query currently uses only dense + BM25 similarity. Filtering by `incident_type` (from the classifier output) before retrieval runs would improve precision for the known taxonomy.
+3. **Metadata filters in retrieval** — The Qdrant query currently uses only dense + BM25 similarity. Filtering by `incident_type` (from the classifier output) before retrieval runs would improve precision for the known taxonomy.
 
 5. **Confidence calibration** — The current `confidence` score is self-reported by the LLM and not calibrated against ground-truth outcomes. A Platt scaling pass over eval results would make the score meaningful as a triage signal.
 

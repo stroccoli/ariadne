@@ -34,7 +34,11 @@ def main() -> None:
         sys.exit(1)
 
     chunks = pipeline._load_docs(chunk_path)
-    report = pipeline.evaluate(chunks)
+    report = pipeline.generate_pipeline_report(
+        chunks,
+        chunk_preset=preset_name,
+        previous_report_path=pipeline.pipeline_report_path,
+    )
     print(report.summary())
 
 

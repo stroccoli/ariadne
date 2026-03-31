@@ -35,7 +35,28 @@ def main() -> None:
         sys.exit(1)
 
     chunks = pipeline._load_docs(chunk_path)
-    pipeline.index(chunks, embedding_batch_size=batch_size)
+    # DVC guarantees this stage only re-runs when chunk data changes, so always
+    # do a full upsert (incremental=False) to ensure updated payloads (e.g. tags
+    # added by preprocessing) are written to Qdrant.
+    embedding_model_check = params.get("embedding_model_check", True)
+    pipeline.index(
+        chunks,
+        embedding_batch_size=batch_size,
+        incremental=False,
+        embedding_model_check=embedding_model_check,
+    )
+
+    # Warn loudly if partial failure occurred
+    import json as _json
+    if pipeline.index_metrics_path.exists():
+        metrics = _json.loads(pipeline.index_metrics_path.read_text(encoding="utf-8"))
+        if metrics.get("partial_failure"):
+            print(
+                f"\n⚠  WARNING: Partial indexing failure detected! "
+                f"{metrics.get('upsert_error_count', 0)} batch(es) failed. "
+                f"See {pipeline.index_metrics_path} for rollback IDs.",
+                file=sys.stderr,
+            )
 
 
 if __name__ == "__main__":

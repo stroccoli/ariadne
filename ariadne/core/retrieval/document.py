@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 from datetime import datetime
 from typing import Literal
 
@@ -71,6 +72,7 @@ class IngestionDocument(BaseModel):
             "chunk_total": self.chunk_total,
             "parent_id": self.parent_id,
             "token_count": self.token_count,
+            "embedding_model": os.environ.get("EMBEDDING_PROVIDER", "unknown"),
         }
 
 

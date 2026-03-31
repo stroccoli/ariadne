@@ -61,16 +61,14 @@ def build_eval_set_from_titles(
 def load_curated_eval_set(path: Path) -> list[EvalQuery]:
     """Load a curated eval set from a JSON file.
 
-    Each entry has: query_id, query_text, relevant_tags (used as proxy doc IDs),
-    and optionally difficulty.
+    Each entry must have: query_id, query_text, relevant_doc_ids.
     """
     raw = json.loads(path.read_text(encoding="utf-8"))
     eval_queries: list[EvalQuery] = []
     for entry in raw:
         query_id = entry["query_id"]
         query_text = entry["query_text"]
-        # Use relevant_tags as proxy relevant doc identifiers for tag-based matching
-        relevant_ids = entry.get("relevant_tags", [])
+        relevant_ids = entry.get("relevant_doc_ids", [])
         eval_queries.append(
             EvalQuery(
                 query_id=query_id,
