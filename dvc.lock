@@ -169,3 +169,27 @@ stages:
       hash: md5
       md5: c01fc02bcccb1b4c5ef94e56658f5c88
       size: 2595
+  diagnose:
+    cmd: python scripts/stages/diagnose.py
+    deps:
+    - path: ariadne/core/retrieval/pipeline_diagnosis.py
+      hash: md5
+      md5: 2228ec55242b985cd17b89e3c54b6eb9
+      size: 11807
+    - path: ariadne/core/retrieval/pipeline_report.py
+      hash: md5
+      md5: 130fb7a4b1cc488f68a18dee0849a733
+      size: 16916
+    - path: data/datasets/pipeline_report.json
+      hash: md5
+      md5: c01fc02bcccb1b4c5ef94e56658f5c88
+      size: 2595
+    - path: scripts/stages/diagnose.py
+      hash: md5
+      md5: 5eb72432f12b9b45af54b1efbcdc0b4f
+      size: 1384
+    outs:
+    - path: data/datasets/pipeline_diagnosis.json
+      hash: md5
+      md5: 18d2f1c2fe95e82b2d1bb897eaeccee9
+      size: 1220

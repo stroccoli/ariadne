@@ -68,3 +68,14 @@ stages:
     metrics:
       - data/datasets/pipeline_report.json:
           cache: false
+
+  diagnose:
+    cmd: python scripts/stages/diagnose.py
+    deps:
+      - data/datasets/pipeline_report.json
+      - ariadne/core/retrieval/pipeline_diagnosis.py
+      - ariadne/core/retrieval/pipeline_report.py
+      - scripts/stages/diagnose.py
+    outs:
+      - data/datasets/pipeline_diagnosis.json:
+          cache: false

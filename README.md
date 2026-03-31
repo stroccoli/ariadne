@@ -221,7 +221,7 @@ npm run dev
 
 ## Ingestion pipeline
 
-Five-stage DVC pipeline — only stale stages re-run. Postmortems always collected; GitHub issues fetched when `GITHUB_TOKEN` is set.
+Six-stage DVC pipeline — only stale stages re-run. Postmortems always collected; GitHub issues fetched when `GITHUB_TOKEN` is set.
 
 ```mermaid
 flowchart LR
@@ -229,41 +229,51 @@ flowchart LR
     B --> C["✂️ **chunk**\nmedium preset"]
     C --> D["🔢 **index**\nembed → Qdrant upsert"]
     D --> E["📊 **evaluate**\npipeline_report.json"]
+    E --> F["🩺 **diagnose**\nLLM analysis → pipeline_diagnosis.json"]
 ```
 
 ```bash
 dvc repro                       # run full pipeline (postmortems only)
 GITHUB_TOKEN=ghp_... dvc repro  # also collect GitHub issues
 dvc status                      # check stale stages
-dvc metrics diff                # compare report vs previous run
+dvc metrics diff                # compare pipeline_report vs previous run
 ```
 
 Key `params.yaml` knobs: `max_postmortems` (800) · `max_per_repo` (200) · `chunk_preset` (medium) · `embedding_batch_size` (32) · `semantic_dedup_threshold` (0.85)
 
-### Last pipeline run — 2026-03-31
+### Last pipeline diagnosis — 2026-03-31
 
-| | 📥 collect | 🧹 preprocess | ✂️ chunk | 🔢 index |
-|---|---|---|---|---|
-| **Input** | — | 1,002 raw docs | 922 clean docs | 1,928 chunks |
-| **Output** | 1,002 raw docs | 922 clean docs | 1,928 chunks | 1,928 embedded |
-| **Rejected** | — | 80 (6.1% error · 4.3% dedup · 2.0% semantic) | — | 0 upsert errors |
-| **Time** | — | 19.9 s | < 1 s | 18.6 s · 103.6 docs/s |
+After each run the `diagnose` stage asks the LLM to interpret all metrics and produce a structured verdict. Example output (`pipeline_diagnosis.json`):
 
-**Corpus**
+```json
+{
+  "status": "CRITICAL",
+  "summary": "The pipeline indexed 0 of 1,928 chunks — retrieval will return nothing.",
+  "root_causes": [
+    {
+      "cause": "Indexing failure — no vectors written to Qdrant",
+      "evidence": "total_chunks_indexed=0, collection_vector_count=0, index_fill_ratio=0.0"
+    },
+    {
+      "cause": "Embedding model identity not recorded",
+      "evidence": "embedding_model=\"unknown\" — model mismatch between index and query time cannot be detected"
+    }
+  ],
+  "impact": [
+    "RAG retrieval returns nothing — LLM answers will hallucinate or fall back to generic responses",
+    "Model version guard cannot protect against silent embedding drift"
+  ],
+  "recommended_actions": [
+    "Verify Qdrant is reachable: docker compose ps && curl http://localhost:6333/healthz",
+    "Re-run the index stage: dvc repro index",
+    "Check that EMBEDDING_PROVIDER and the corresponding API key / Ollama model are configured",
+    "Set EMBEDDING_MODEL env var or ensure qdrant_store records the model tag on upsert"
+  ],
+  "reasoning": "CRITICAL threshold triggered: total_chunks_indexed=0 while total_chunks=1928 means the index stage ran but wrote nothing. collection_vector_count=0 confirms Qdrant is empty. embedding_model=\"unknown\" triggers an additional WARNING but is overshadowed by the CRITICAL index failure."
+}
+```
 
-| Source | Chunks | | Severity | Chunks |
-|---|---|---|---|---|
-| GitHub issues | 1,736 (90%) | | ⚪ unknown | 1,633 |
-| Post-mortems | 192 (10%) | | 🟠 high | 115 |
-| **Total** | **1,928** | | 🟡 medium | 68 |
-| | | | 🟢 low | 94 |
-| | | | 🔴 critical | 18 |
-
-**Top services** · 104 unique · avg 2.09 chunks/doc
-
-`compose` 516 · `vault` 429 · `prometheus` 390 · `kubernetes` 374 · `istio` 25 · `google` 22 · `amazon` 14 · `cloudflare` 12
-
-Full report → [`data/datasets/pipeline_report.json`](data/datasets/pipeline_report.json)
+Full diagnosis → [`data/datasets/pipeline_diagnosis.json`](data/datasets/pipeline_diagnosis.json)
 
 
 
