@@ -230,7 +230,9 @@ class QdrantVectorStore(VectorStore):
             return {"count": 0, "vector_size": 0}
         try:
             info = self.client.get_collection(self.collection_name)
-            count = info.vectors_count or 0
+            # `vectors_count` was removed in qdrant-client >=1.7; use
+            # `points_count` with a fallback for older server versions.
+            count = getattr(info, "points_count", None) or getattr(info, "vectors_count", None) or 0
             size = info.config.params.vectors.size
             return {"count": count, "vector_size": size}
         except Exception as exc:

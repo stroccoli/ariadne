@@ -228,6 +228,7 @@ class IngestionPipeline:
             "chunks_submitted": len(chunks),
             "pre_index_vector_count": pre_index_count,
             "post_index_vector_count": post_index_count,
+            "successfully_indexed_count": len(successfully_indexed_ids),
             "null_vector_count": null_vector_count,
             "malformed_payload_count": malformed_payload_count,
             "upsert_error_count": upsert_error_count,
@@ -366,8 +367,11 @@ class IngestionPipeline:
             total_clean_docs=clean_count,
             total_chunks=len(chunks),
             total_chunks_indexed=index_data.get(
-                "post_index_vector_count",
-                index_data.get("chunks_submitted", len(chunks)),
+                "successfully_indexed_count",
+                index_data.get(
+                    "post_index_vector_count",
+                    index_data.get("chunks_submitted", len(chunks)),
+                ),
             ),
             extraction_error_rate=preprocess_data.get("extraction_error_rate", 0.0),
             duplicate_ratio=preprocess_data.get("duplicate_ratio", 0.0),

@@ -77,7 +77,7 @@ stages:
       size: 1231804
     - path: data/datasets/preprocess_report.json
       hash: md5
-      md5: e3096917ea55c9b7e706a999516fc5cf
+      md5: c32879c6d684cee78994447351c6a302
       size: 909
   chunk:
     cmd: python scripts/stages/chunk.py
@@ -107,12 +107,12 @@ stages:
     deps:
     - path: ariadne/core/ingestion.py
       hash: md5
-      md5: f473f9bbe9659a2449b3f4d9ee0441a0
-      size: 27180
+      md5: 762204c18234ecb78dfaa99a72734372
+      size: 27358
     - path: ariadne/core/retrieval/vector_stores/qdrant_store.py
       hash: md5
-      md5: 63144c5450a49952e329807e223661b2
-      size: 17495
+      md5: 98d1e5471583600e6317975ce51874d8
+      size: 17694
     - path: data/datasets/chunks_medium.json
       hash: md5
       md5: 704e1f6c16538e81f70104ee2a0cd0e8
@@ -128,34 +128,34 @@ stages:
     outs:
     - path: data/datasets/index_metrics.json
       hash: md5
-      md5: 05f120f900f753f6f47ff50ab6307707
-      size: 380
+      md5: 65b2a9e31e4bc7ad0cbe71f503e109f0
+      size: 85259
   evaluate:
     cmd: python scripts/stages/evaluate.py
     deps:
     - path: ariadne/core/ingestion.py
       hash: md5
-      md5: f473f9bbe9659a2449b3f4d9ee0441a0
-      size: 27180
+      md5: 762204c18234ecb78dfaa99a72734372
+      size: 27358
     - path: ariadne/core/retrieval/pipeline_report.py
       hash: md5
       md5: 130fb7a4b1cc488f68a18dee0849a733
       size: 16916
     - path: ariadne/core/retrieval/vector_stores/qdrant_store.py
       hash: md5
-      md5: 63144c5450a49952e329807e223661b2
-      size: 17495
+      md5: 98d1e5471583600e6317975ce51874d8
+      size: 17694
     - path: data/datasets/chunks_medium.json
       hash: md5
       md5: 704e1f6c16538e81f70104ee2a0cd0e8
       size: 1857268
     - path: data/datasets/index_metrics.json
       hash: md5
-      md5: 05f120f900f753f6f47ff50ab6307707
-      size: 380
+      md5: 65b2a9e31e4bc7ad0cbe71f503e109f0
+      size: 85259
     - path: data/datasets/preprocess_report.json
       hash: md5
-      md5: e3096917ea55c9b7e706a999516fc5cf
+      md5: c32879c6d684cee78994447351c6a302
       size: 909
     - path: scripts/stages/evaluate.py
       hash: md5
@@ -167,8 +167,8 @@ stages:
     outs:
     - path: data/datasets/pipeline_report.json
       hash: md5
-      md5: 2ef8412551d62eed3acdc5400418416e
-      size: 2587
+      md5: 30982e05682ac732144e83d83b709d56
+      size: 2594
   diagnose:
     cmd: python scripts/stages/diagnose.py
     deps:
@@ -182,8 +182,8 @@ stages:
       size: 16916
     - path: data/datasets/pipeline_report.json
       hash: md5
-      md5: cfff4664e3a295fa3bcd31e85a398709
-      size: 2595
+      md5: 30982e05682ac732144e83d83b709d56
+      size: 2594
     - path: scripts/stages/diagnose.py
       hash: md5
       md5: 5eb72432f12b9b45af54b1efbcdc0b4f
@@ -191,5 +191,5 @@ stages:
     outs:
     - path: data/datasets/pipeline_diagnosis.json
       hash: md5
-      md5: 24802396a5125bd689bff98891b8b421
-      size: 1285
+      md5: f16e293b2074088feebb38d2bbb91791
+      size: 1093

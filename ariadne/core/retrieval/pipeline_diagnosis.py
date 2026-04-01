@@ -222,6 +222,51 @@ Rules:
 
 
 # ---------------------------------------------------------------------------
+# Deterministic status check (guardrail against LLM hallucination)
+# ---------------------------------------------------------------------------
+
+
+def _compute_deterministic_status(report: "PipelineHealthReport") -> str:
+    """Apply status rules from the prompt deterministically, ignoring the LLM.
+
+    This is used as a post-LLM guardrail: the LLM provides the narrative, but
+    the final *status* is always authoritative based on the actual metric values.
+    """
+    dq = report.data_quality
+    vh = report.vector_health
+
+    # CRITICAL rules (first match wins)
+    if dq.total_chunks > 0 and dq.total_chunks_indexed == 0:
+        return CRITICAL
+    if dq.total_chunks > 0 and vh.collection_vector_count == 0:
+        return CRITICAL
+    if dq.partial_failure:
+        return CRITICAL
+    if dq.upsert_error_count > 0:
+        return CRITICAL
+
+    # WARNING rules
+    if dq.extraction_error_rate > 0.10:
+        return WARNING
+    if dq.total_chunks > 0 and vh.index_fill_ratio < 0.95:
+        return WARNING
+    if vh.near_zero_vector_count > 0:
+        return WARNING
+    if dq.null_vector_count > 0:
+        return WARNING
+    if dq.malformed_payload_count > 0:
+        return WARNING
+    if vh.norm_drift_from_previous is not None and vh.norm_drift_from_previous > 0.10:
+        return WARNING
+    if vh.embedding_dim == 0:
+        return WARNING
+    if report.embedding_model == "unknown":
+        return WARNING
+
+    return HEALTHY
+
+
+# ---------------------------------------------------------------------------
 # Main entry-point
 # ---------------------------------------------------------------------------
 
@@ -269,6 +314,93 @@ def diagnose_pipeline(
         recommended_actions=parsed.get("recommended_actions", []),
         reasoning=parsed.get("reasoning", ""),
     )
+
+    # --- Guardrail: override LLM status with deterministic rule evaluation ---
+    # LLMs can hallucinate metric values from the prompt; the authoritative
+    # status is always computed from the actual report object.
+    authoritative_status = _compute_deterministic_status(report)
+    if diagnosis.status != authoritative_status:
+        llm_status = diagnosis.status  # capture before overwriting
+        logger.warning(
+            "LLM status '%s' overridden to '%s' based on deterministic rule check "
+            "(LLM may have hallucinated metric values).",
+            llm_status,
+            authoritative_status,
+        )
+        diagnosis.status = authoritative_status
+        # Clear LLM narrative that was based on fabricated metric values
+        diagnosis.root_causes = []
+        diagnosis.impact = []
+        diagnosis.recommended_actions = []
+        # Annotate the LLM reasoning so it's clear it was overridden
+        diagnosis.reasoning = (
+            f"[OVERRIDE] LLM assigned '{llm_status}' but deterministic rule "
+            f"evaluation produced '{authoritative_status}'. LLM original reasoning: "
+            + diagnosis.reasoning
+        )
+
+        # Build minimal deterministic narrative for the new status
+        dq = report.data_quality
+        vh = report.vector_health
+        if authoritative_status == HEALTHY:
+            diagnosis.summary = "Pipeline is healthy — all metric thresholds are within normal bounds."
+        elif authoritative_status == WARNING:
+            warnings: list[str] = []
+            if report.embedding_model == "unknown":
+                warnings.append("embedding_model=unknown")
+                diagnosis.root_causes.append(RootCause(
+                    cause="Embedding model not recorded",
+                    evidence="embedding_model=unknown",
+                ))
+                diagnosis.impact.append(
+                    "Model mismatch between indexing and query time cannot be detected."
+                )
+                diagnosis.recommended_actions.append(
+                    "Set the EMBEDDING_PROVIDER environment variable before running the pipeline."
+                )
+            if vh.embedding_dim == 0:
+                warnings.append("embedding_dim=0")
+                diagnosis.root_causes.append(RootCause(
+                    cause="Embedding dimension not recorded",
+                    evidence="embedding_dim=0",
+                ))
+            if dq.total_chunks > 0 and vh.index_fill_ratio < 0.95:
+                warnings.append(f"index_fill_ratio={vh.index_fill_ratio:.2f}")
+                diagnosis.root_causes.append(RootCause(
+                    cause="Incomplete indexing",
+                    evidence=f"index_fill_ratio={vh.index_fill_ratio:.2f}, total_chunks={dq.total_chunks}",
+                ))
+            if dq.extraction_error_rate > 0.10:
+                warnings.append(f"extraction_error_rate={dq.extraction_error_rate:.2%}")
+                diagnosis.root_causes.append(RootCause(
+                    cause="High extraction error rate",
+                    evidence=f"extraction_error_rate={dq.extraction_error_rate:.2%}",
+                ))
+            diagnosis.summary = (
+                f"Pipeline completed with warnings: {', '.join(warnings)}. "
+                "No indexing failures detected."
+            )
+        elif authoritative_status == CRITICAL:
+            crit_reasons: list[str] = []
+            if dq.total_chunks > 0 and dq.total_chunks_indexed == 0:
+                crit_reasons.append(f"total_chunks_indexed=0 (total_chunks={dq.total_chunks})")
+                diagnosis.root_causes.append(RootCause(
+                    cause="Indexing failure: no chunks indexed",
+                    evidence=f"total_chunks_indexed=0, total_chunks={dq.total_chunks}",
+                ))
+            if dq.total_chunks > 0 and vh.collection_vector_count == 0:
+                crit_reasons.append("collection_vector_count=0")
+                diagnosis.root_causes.append(RootCause(
+                    cause="Empty vector collection",
+                    evidence=f"collection_vector_count=0, total_chunks={dq.total_chunks}",
+                ))
+            if dq.partial_failure:
+                crit_reasons.append("partial_failure=true")
+                diagnosis.root_causes.append(RootCause(
+                    cause="Partial upsert failure",
+                    evidence=f"partial_failure=true, upsert_error_count={dq.upsert_error_count}",
+                ))
+            diagnosis.summary = f"Pipeline CRITICAL: {'; '.join(crit_reasons)}."
 
     logger.info("Diagnosis complete — status: %s", diagnosis.status)
     return diagnosis
