@@ -1,6 +1,36 @@
 APP     ?= ariadne-api
 FLYCTL  := $(shell command -v flyctl 2>/dev/null || command -v fly 2>/dev/null)
 
+# ── Offline pipelines ──────────────────────────────────────────────────────────
+#
+# These targets install only their required extras (not shipped to production)
+# and run the corresponding offline script.
+#
+#   make eval                           # full evaluation (50 samples)
+#   make eval ARGS="--num-samples 5"    # quick smoke-test
+#   make ingest                         # full DVC ingestion pipeline
+#   make ingest ARGS="chunk index"      # run specific DVC stages
+
+ARGS ?=
+
+.PHONY: eval eval-setup ingest
+
+eval:
+	pip install -e ".[evals]" --quiet
+	python evals/ragas_eval.py $(ARGS)
+
+# Upload / refresh the LangSmith dataset then run the evaluation.
+# Adds --force-refresh so stale or missing reference fields are fixed first.
+#   make eval-setup                          # all 50 samples
+#   make eval-setup ARGS="--num-samples 5"   # quick smoke-test
+eval-setup:
+	pip install -e ".[evals]" --quiet
+	python evals/ragas_eval.py --force-refresh $(ARGS)
+
+ingest:
+	pip install -e ".[ingestion]" --quiet
+	dvc repro $(ARGS)
+
 # ── Fly.io ─────────────────────────────────────────────────────────────────────
 #
 # Reads production-relevant variables from your local .env and pushes them
