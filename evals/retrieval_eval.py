@@ -58,6 +58,28 @@ def build_eval_set_from_titles(
     return eval_queries
 
 
+def load_curated_eval_set(path: Path) -> list[EvalQuery]:
+    """Load a curated eval set from a JSON file.
+
+    Each entry must have: query_id, query_text, relevant_doc_ids.
+    """
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    eval_queries: list[EvalQuery] = []
+    for entry in raw:
+        query_id = entry["query_id"]
+        query_text = entry["query_text"]
+        relevant_ids = entry.get("relevant_doc_ids", [])
+        eval_queries.append(
+            EvalQuery(
+                query_id=query_id,
+                query_text=query_text,
+                relevant_doc_ids=relevant_ids,
+            )
+        )
+    logger.info("Loaded %d curated eval queries from %s", len(eval_queries), path)
+    return eval_queries
+
+
 def recall_at_k(
     retrieved_ids: list[str],
     relevant_ids: list[str],

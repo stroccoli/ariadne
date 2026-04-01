@@ -50,10 +50,25 @@ def chunk_document(
     if len(text_chunks) <= 1:
         return [doc]
 
-    total = len(text_chunks)
+    # Discard degenerate chunks that are mostly overlap content: if the chunk
+    # is shorter than 1.5× the overlap window it adds almost no unique content.
+    min_chunk_len = int(chunk_overlap * 1.5)
+    valid_chunks = [t for t in text_chunks if len(t) >= min_chunk_len]
+    n_discarded = len(text_chunks) - len(valid_chunks)
+    if n_discarded:
+        logger.warning(
+            "Doc '%s': discarded %d degenerate chunk(s) (len < %d chars)",
+            doc.id,
+            n_discarded,
+            min_chunk_len,
+        )
+    if not valid_chunks:
+        return [doc]
+
+    total = len(valid_chunks)
     chunks: list[IngestionDocument] = []
 
-    for i, chunk_text in enumerate(text_chunks):
+    for i, chunk_text in enumerate(valid_chunks):
         chunk_id = f"{doc.id}-chunk-{i}-of-{total}"
 
         chunk = doc.model_copy(
@@ -91,12 +106,20 @@ def chunk_documents(
 ) -> list[IngestionDocument]:
     result: list[IngestionDocument] = []
     n_chunked = 0
+    n_degenerate_total = 0
 
     for doc in docs:
+        before = 0
         chunks = chunk_document(doc, strategy=strategy, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
         result.extend(chunks)
         if len(chunks) > 1:
             n_chunked += 1
+
+    if n_degenerate_total:
+        logger.warning(
+            "Chunking: discarded %d degenerate overlap-only chunks across all docs",
+            n_degenerate_total,
+        )
 
     logger.info(
         "Chunking complete: %d docs → %d chunks (%d docs were split)",

@@ -94,7 +94,7 @@ Ariadne supports incident responders, on-call engineers, and SREs who need a fas
 | Pipeline | `ariadne/core/graph.py` | LangGraph `StateGraph` — 4 nodes, conditional retry routing |
 | Classifier | `ariadne/core/agents/classifier.py` | LLM call → `incident_type` + `classification_confidence` |
 | RAG retriever | `ariadne/core/agents/rag.py` | Embed query → Qdrant hybrid search → top-3 context docs |
-| Ingestion pipeline | `scripts/ingest_pipeline.py` | Collect → preprocess → chunk → embed → index into Qdrant |
+| Ingestion pipeline | DVC pipeline (dvc.yaml) | Collect → preprocess → chunk → embed → index into Qdrant |
 | Analyzer | `ariadne/core/agents/analyzer.py` | LLM call with context → `root_cause`, `recommended_actions`, `analysis_confidence` |
 | LLM providers | `ariadne/core/integrations/llm/` | OpenAI, Ollama, Gemini — swappable via `LLM_PROVIDER` |
 | Embeddings | `ariadne/core/integrations/embeddings/` | OpenAI, Ollama, Gemini, local hash — swappable |
@@ -105,7 +105,8 @@ Full diagram and ADR index → [docs/architecture.md](docs/architecture.md)
 
 ---
 
-## Stack
+<details>
+<summary><strong>Stack</strong></summary>
 
 | Component | Technology | Why | Considered |
 |---|---|---|---|
@@ -120,6 +121,8 @@ Full diagram and ADR index → [docs/architecture.md](docs/architecture.md)
 | Frontend hosting | Fly.io same-origin / Vercel | Next.js static export served from Docker image; Vercel optional for standalone | — |
 | Observability | LangSmith | Per-run traces, token counts, per-node latency | LangFuse |
 | Error tracking | Sentry | 5xx errors only, 10% trace sampling, free tier | — |
+
+</details>
 
 ---
 
@@ -166,10 +169,11 @@ docker compose up -d
 
 # 6. Index the knowledge base into Qdrant
 # Post-mortems only (no GitHub token needed):
-python scripts/ingest_pipeline.py --mode=postmortems-only
+dvc repro
 
 # Or full pipeline (GitHub issues + post-mortems):
-python scripts/ingest_pipeline.py --mode=full --github-token=ghp_...
+export GITHUB_TOKEN=ghp_...
+dvc repro
 
 # 7. Start the API
 uvicorn ariadne.api.main:app --reload --port 8000
@@ -195,39 +199,12 @@ Interactive API docs: `http://localhost:8000/docs`
 
 ### Re-indexing the knowledge base
 
-The ingestion pipeline collects incident data from GitHub issues and public post-mortems, preprocesses and chunks the documents, embeds them, and indexes into Qdrant. Intermediate results are checkpointed under `data/pipeline/`.
-
 ```bash
-# Post-mortems only (no token needed, collects from danluu/post-mortems)
-python scripts/ingest_pipeline.py --mode=postmortems-only
-
-# Full pipeline (GitHub issues + post-mortems)
-python scripts/ingest_pipeline.py --mode=full --github-token=ghp_...
-
-# Re-index from existing checkpoints (skip collection)
-python scripts/ingest_pipeline.py --mode=index
-
-# Evaluate retrieval quality only
-python scripts/ingest_pipeline.py --mode=eval
-
-# Force re-run, ignoring all checkpoints
-python scripts/ingest_pipeline.py --mode=full --force --github-token=ghp_...
-
-# Qdrant Cloud (production)
-QDRANT_URL=https://<cluster>.qdrant.io:6333 \
-QDRANT_API_KEY=<key> \
-python scripts/ingest_pipeline.py --mode=full --github-token=ghp_...
+dvc repro                       # postmortems only
+GITHUB_TOKEN=ghp_... dvc repro  # include GitHub issues
 ```
 
-| Flag | Default | Description |
-|---|---|---|
-| `--mode` | `postmortems-only` | `full`, `postmortems-only`, `index`, or `eval` |
-| `--github-token` | — | GitHub PAT (required for `full` mode) |
-| `--max-per-repo` | 200 | Max issues per GitHub repo |
-| `--max-postmortems` | 800 | Max post-mortems to collect |
-| `--chunk-preset` | `medium` | Chunking preset: `small`, `medium`, `large`, `sentence` |
-| `--embedding-batch-size` | 32 | Texts per embedding batch |
-| `--force` | off | Ignore checkpoints and re-run all stages |
+See the [Ingestion pipeline](#ingestion-pipeline) section for details.
 
 ### Frontend (optional)
 
@@ -241,6 +218,64 @@ npm run dev
 ```
 
 ---
+
+## Ingestion pipeline
+
+Six-stage DVC pipeline — only stale stages re-run. Postmortems always collected; GitHub issues fetched when `GITHUB_TOKEN` is set.
+
+```mermaid
+flowchart LR
+    A["📥 **collect**\npostmortems + GitHub issues"] --> B["🧹 **preprocess**\nclean · dedup · age filter"]
+    B --> C["✂️ **chunk**\nmedium preset"]
+    C --> D["🔢 **index**\nembed → Qdrant upsert"]
+    D --> E["📊 **evaluate**\npipeline_report.json"]
+    E --> F["🩺 **diagnose**\nLLM analysis → pipeline_diagnosis.json"]
+```
+
+```bash
+dvc repro                       # run full pipeline (postmortems only)
+GITHUB_TOKEN=ghp_... dvc repro  # also collect GitHub issues
+dvc status                      # check stale stages
+dvc metrics diff                # compare pipeline_report vs previous run
+```
+
+Key `params.yaml` knobs: `max_postmortems` (800) · `max_per_repo` (200) · `chunk_preset` (medium) · `embedding_batch_size` (32) · `semantic_dedup_threshold` (0.85)
+
+### Last pipeline diagnosis — 2026-03-31
+
+After each run the `diagnose` stage asks the LLM to interpret all metrics and produce a structured verdict. Example output (`pipeline_diagnosis.json`):
+
+```json
+{
+  "status": "CRITICAL",
+  "summary": "The pipeline indexed 0 of 1,928 chunks — retrieval will return nothing.",
+  "root_causes": [
+    {
+      "cause": "Indexing failure — no vectors written to Qdrant",
+      "evidence": "total_chunks_indexed=0, collection_vector_count=0, index_fill_ratio=0.0"
+    },
+    {
+      "cause": "Embedding model identity not recorded",
+      "evidence": "embedding_model=\"unknown\" — model mismatch between index and query time cannot be detected"
+    }
+  ],
+  "impact": [
+    "RAG retrieval returns nothing — LLM answers will hallucinate or fall back to generic responses",
+    "Model version guard cannot protect against silent embedding drift"
+  ],
+  "recommended_actions": [
+    "Verify Qdrant is reachable: docker compose ps && curl http://localhost:6333/healthz",
+    "Re-run the index stage: dvc repro index",
+    "Check that EMBEDDING_PROVIDER and the corresponding API key / Ollama model are configured",
+    "Set EMBEDDING_MODEL env var or ensure qdrant_store records the model tag on upsert"
+  ],
+  "reasoning": "CRITICAL threshold triggered: total_chunks_indexed=0 while total_chunks=1928 means the index stage ran but wrote nothing. collection_vector_count=0 confirms Qdrant is empty. embedding_model=\"unknown\" triggers an additional WARNING but is overshadowed by the CRITICAL index failure."
+}
+```
+
+Full diagnosis → [`data/datasets/pipeline_diagnosis.json`](data/datasets/pipeline_diagnosis.json)
+
+
 
 ## Running evaluations
 
@@ -298,7 +333,8 @@ For technical details:
 
 ---
 
-## API reference
+<details>
+<summary><strong>API reference</strong></summary>
 
 ### `POST /analyze`
 
@@ -394,9 +430,12 @@ curl https://ariadne-api-polished-shape-2678.fly.dev/ready
 # → {"status": "ready"}
 ```
 
+</details>
+
 ---
 
-## Roadmap
+<details>
+<summary><strong>Roadmap</strong></summary>
 
 These items were deliberately deferred to keep the project shipping rather than building:
 
@@ -404,15 +443,16 @@ These items were deliberately deferred to keep the project shipping rather than 
 
 2. **Streaming response for `POST /analyze`** — The API currently returns the full result after the entire pipeline finishes (~3–6s). Server-sent events (SSE) would allow the UI to show partial results as each node completes, improving perceived latency significantly.
 
-3. **Ingestion pipeline improvements** — The current `scripts/ingest_pipeline.py` collects from GitHub issues and public post-mortems, with checkpointing and retrieval evaluation. A `POST /admin/reindex` endpoint would make re-indexing self-service without CLI access.
-
-4. **Metadata filters in retrieval** — The Qdrant query currently uses only dense + BM25 similarity. Filtering by `incident_type` (from the classifier output) before retrieval runs would improve precision for the known taxonomy.
+3. **Metadata filters in retrieval** — The Qdrant query currently uses only dense + BM25 similarity. Filtering by `incident_type` (from the classifier output) before retrieval runs would improve precision for the known taxonomy.
 
 5. **Confidence calibration** — The current `confidence` score is self-reported by the LLM and not calibrated against ground-truth outcomes. A Platt scaling pass over eval results would make the score meaningful as a triage signal.
 
+</details>
+
 ---
 
-## Contributing
+<details>
+<summary><strong>Contributing</strong></summary>
 
 ```bash
 # Run unit tests (no external services required)
@@ -426,6 +466,8 @@ python evals/run_ab_test.py
 ```
 
 Keep PRs focused — don't mix feature additions with refactors. If you're adding a new LLM provider, follow the existing pattern in `ariadne/core/integrations/llm/`: implement `LLMClient`, wire it in `config.py`, add unit tests.
+
+</details>
 
 ---
 

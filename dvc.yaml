@@ -1,0 +1,81 @@
+stages:
+  collect:
+    cmd: python scripts/stages/collect.py
+    deps:
+      - scripts/collect/postmortems.py
+      - scripts/collect/github_issues.py
+      - scripts/stages/collect.py
+    params:
+      - ingest.max_postmortems
+      - ingest.max_per_repo
+    outs:
+      - data/datasets/raw_postmortems.json
+      - data/datasets/raw_github.json:
+          persist: true  # only created when GITHUB_TOKEN is set
+
+  preprocess:
+    cmd: python scripts/stages/preprocess.py
+    deps:
+      - data/datasets/raw_postmortems.json
+      - ariadne/core/retrieval/preprocessing.py
+      - ariadne/core/retrieval/text_utils.py
+      - scripts/stages/preprocess.py
+    params:
+      - ingest.semantic_dedup_threshold
+      - ingest.max_document_age_days
+    outs:
+      - data/datasets/clean_docs.json
+      - data/datasets/preprocess_report.json:
+          cache: false
+
+  chunk:
+    cmd: python scripts/stages/chunk.py
+    deps:
+      - data/datasets/clean_docs.json
+      - ariadne/core/retrieval/chunking.py
+      - scripts/stages/chunk.py
+    params:
+      - ingest.chunk_preset
+    outs:
+      - data/datasets/chunks_medium.json
+
+  index:
+    cmd: python scripts/stages/index.py
+    deps:
+      - data/datasets/chunks_medium.json
+      - ariadne/core/ingestion.py
+      - ariadne/core/retrieval/vector_stores/qdrant_store.py
+      - scripts/stages/index.py
+    params:
+      - ingest.embedding_batch_size
+      - ingest.embedding_model_check
+    outs:
+      - data/datasets/index_metrics.json:
+          cache: false
+
+  evaluate:
+    cmd: python scripts/stages/evaluate.py
+    deps:
+      - data/datasets/chunks_medium.json
+      - data/datasets/preprocess_report.json
+      - data/datasets/index_metrics.json
+      - ariadne/core/ingestion.py
+      - ariadne/core/retrieval/pipeline_report.py
+      - ariadne/core/retrieval/vector_stores/qdrant_store.py
+      - scripts/stages/evaluate.py
+    params:
+      - ingest.chunk_preset
+    metrics:
+      - data/datasets/pipeline_report.json:
+          cache: false
+
+  diagnose:
+    cmd: python scripts/stages/diagnose.py
+    deps:
+      - data/datasets/pipeline_report.json
+      - ariadne/core/retrieval/pipeline_diagnosis.py
+      - ariadne/core/retrieval/pipeline_report.py
+      - scripts/stages/diagnose.py
+    outs:
+      - data/datasets/pipeline_diagnosis.json:
+          cache: false

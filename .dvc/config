@@ -1,0 +1,4 @@
+[core]
+    remote = mylocal
+['remote "mylocal"']
+    url = /home/sctroccoli/Projects/ariadne/data/datasets/

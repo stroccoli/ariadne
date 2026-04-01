@@ -1,0 +1,13 @@
+ingest:
+  max_postmortems: 800
+  max_per_repo: 200
+  chunk_preset: medium
+  embedding_batch_size: 32
+  # Embedding model version guard: raise error if collection was built with
+  # a different model. Set to false to skip the check (e.g. in CI/testing).
+  embedding_model_check: true
+  # Semantic near-duplicate threshold (Jaccard similarity). Set to null to disable.
+  semantic_dedup_threshold: 0.85
+  # Maximum document age in days. Documents older than this are dropped during
+  # preprocessing. Set to null to disable (no age filter).
+  max_document_age_days: null
