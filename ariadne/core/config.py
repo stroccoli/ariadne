@@ -135,19 +135,21 @@ def get_embedding_client() -> EmbeddingClient:
     client: EmbeddingClient
     model_name: str = provider  # fallback label for cache keys
 
+    embedding_dimensions = int(os.getenv("EMBEDDING_DIMENSIONS", "768"))
+
     if provider == "openai":
         api_key = os.getenv("OPENAI_API_KEY", "").strip()
         if not api_key:
             raise ValueError("OPENAI_API_KEY is required when EMBEDDING_PROVIDER=openai")
         model_name = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
-        client = OpenAIEmbeddingClient(api_key=api_key, model=model_name)
+        client = OpenAIEmbeddingClient(api_key=api_key, model=model_name, dimensions=embedding_dimensions)
 
     elif provider == "ollama":
         model_name = os.getenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text:latest")
         base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
         timeout = int(os.getenv("OLLAMA_EMBEDDING_TIMEOUT_SECONDS", "60"))
         keep_alive = os.getenv("OLLAMA_KEEP_ALIVE") or None
-        client = OllamaEmbeddingClient(model=model_name, base_url=base_url, timeout=timeout, keep_alive=keep_alive)
+        client = OllamaEmbeddingClient(model=model_name, base_url=base_url, timeout=timeout, keep_alive=keep_alive, dimensions=embedding_dimensions)
 
     elif provider == "local_hash":
         dimensions = int(os.getenv("LOCAL_EMBEDDING_DIMENSIONS", "256"))
@@ -158,7 +160,7 @@ def get_embedding_client() -> EmbeddingClient:
         if not api_key:
             raise ValueError("GEMINI_API_KEY is required when EMBEDDING_PROVIDER=gemini")
         model_name = os.getenv("GEMINI_EMBEDDING_MODEL", "gemini-embedding-001")
-        client = GeminiEmbeddingClient(api_key=api_key, model=model_name)
+        client = GeminiEmbeddingClient(api_key=api_key, model=model_name, dimensions=embedding_dimensions)
 
     else:
         raise ValueError(f"Unsupported EMBEDDING_PROVIDER: {provider}")

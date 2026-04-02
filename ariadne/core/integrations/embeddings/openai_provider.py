@@ -16,19 +16,20 @@ logger = logging.getLogger(__name__)
 
 
 class OpenAIEmbeddingClient(EmbeddingClient):
-    def __init__(self, api_key: str, model: str = "text-embedding-3-small") -> None:
+    def __init__(self, api_key: str, model: str = "text-embedding-3-small", dimensions: int = 768) -> None:
         if not _OPENAI_AVAILABLE:
             raise RuntimeError(
                 "openai package is required for EMBEDDING_PROVIDER=openai. "
                 "Install with: pip install 'ariadne[openai]'"
             )
         self.model = model
+        self.dimensions = dimensions
         self.client = OpenAI(api_key=api_key)
 
     def embed_text(self, text: str) -> list[float]:
         return self.embed_texts([text])[0]
 
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
-        logger.debug("Generating %d embeddings with OpenAI model '%s'", len(texts), self.model)
-        response = self.client.embeddings.create(model=self.model, input=texts)
+        logger.debug("Generating %d embeddings with OpenAI model '%s' (dim=%d)", len(texts), self.model, self.dimensions)
+        response = self.client.embeddings.create(model=self.model, input=texts, dimensions=self.dimensions)
         return [list(item.embedding) for item in response.data]

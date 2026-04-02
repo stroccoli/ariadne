@@ -28,11 +28,13 @@ class OllamaEmbeddingClient(EmbeddingClient):
         timeout: int = 60,
         batch_size: int = DEFAULT_BATCH_SIZE,
         keep_alive: str | None = None,
+        dimensions: int = 768,
     ) -> None:
         self.model = model
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self.batch_size = batch_size
+        self.dimensions = dimensions
         # keep_alive controls how long Ollama holds the embedding model in memory.
         # Defaults to Ollama server setting (typically 5m) when None.
         self.keep_alive = keep_alive
