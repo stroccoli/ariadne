@@ -26,7 +26,7 @@ router = APIRouter()
     dependencies=[Depends(verify_api_key)],
 )
 @limiter.limit("5/minute")
-async def analyze(request: Request, body: AnalyzeRequest) -> AnalyzeResponse:
+def analyze(request: Request, body: AnalyzeRequest) -> AnalyzeResponse:
     """Run the incident analysis pipeline and return structured results.
 
     Requires the X-API-Key header. Rate limited to 5 requests per minute per IP.

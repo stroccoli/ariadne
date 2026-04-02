@@ -1,13 +1,14 @@
 """RAGAS evaluation runner for the Ariadne incident analysis pipeline.
 
-Measures four standard RAG quality metrics and publishes results as a
-native LangSmith Experiment for side-by-side comparison across runs.
+Orchestrates the full evaluation loop: ensures the LangSmith dataset is
+up-to-date, then runs all evaluators against the pipeline and publishes
+results as a native LangSmith Experiment.
 
-Metrics:
-    faithfulness       — Is the answer grounded in the retrieved context?
-    answer_relevancy   — Does the answer address the incident logs?
-    context_precision  — Is relevant context ranked higher in the retrieved set?
-    context_recall     — Does the retrieved context cover the expected answer?
+Evaluators (defined in evals/evaluators/):
+    ragas_metrics  — faithfulness, answer_relevancy, context_precision, context_recall
+    rubric_evals   — root_cause_quality, action_quality, final_score
+    token_cost     — prompt_tokens, completion_tokens, estimated_cost_gemini_flash_usd
+    ai_diagnosis   — ai_diagnosis (LLM meta-evaluator)
 
 Usage:
     python evals/ragas_eval.py                             # all 50 samples
@@ -27,7 +28,6 @@ if __name__ == "__main__":
         sys.path.insert(0, _root)
 
 import argparse
-import asyncio
 import logging
 import os
 import warnings
@@ -41,165 +41,24 @@ warnings.filterwarnings("ignore", category=FutureWarning, module="instructor")
 
 import langsmith
 from langsmith import evaluate
-from langsmith.schemas import Example, Run
 
-from ragas.metrics.collections import (
-    AnswerRelevancy,
-    ContextPrecision,
-    ContextRecall,
-    Faithfulness,
+from evals.evaluators import (
+    eval_action_quality,
+    eval_ai_diagnosis,
+    eval_answer_relevancy,
+    eval_completion_tokens,
+    eval_context_precision,
+    eval_context_recall,
+    eval_estimated_cost_gemini_flash,
+    eval_faithfulness,
+    eval_final_score,
+    eval_prompt_tokens,
+    eval_root_cause_quality,
 )
-
-from ariadne.core.graph import run_graph
+from evals.pipeline import run_pipeline
 from evals.ragas_dataset import DEFAULT_DATASET_NAME, build_langsmith_dataset
 
 logger = logging.getLogger(__name__)
-
-
-# ---------------------------------------------------------------------------
-# Lazy metric initialisation (avoid paying LLM setup cost at import time)
-# ---------------------------------------------------------------------------
-
-_metrics: dict[str, Faithfulness | AnswerRelevancy | ContextPrecision | ContextRecall] | None = None
-
-
-def _get_metrics() -> dict:
-    global _metrics
-    if _metrics is None:
-        # EVAL_LLM_PROVIDER controls which LLM scores the RAGAS metrics.
-        # Defaults to "ollama". Set to "openai" in .env for a cloud fallback.
-        # Note: the model must support reliable structured (JSON) output.
-        #   ollama → uses EVAL_OLLAMA_MODEL (default:  deepseek-r1:8b)
-        #            and nomic-embed-text for embeddings
-        #   openai → uses OPENAI_MODEL + OPENAI_EMBEDDING_MODEL
-        from openai import AsyncOpenAI
-        from ragas.llms import llm_factory
-
-        eval_provider = os.getenv("EVAL_LLM_PROVIDER", "ollama").lower()
-
-        if eval_provider == "openai":
-            from ragas.embeddings.openai_provider import OpenAIEmbeddings
-
-            model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-            embedding_model = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
-            client = AsyncOpenAI()
-            llm = llm_factory(model, provider="openai", client=client)
-            embeddings = OpenAIEmbeddings(client=client, model=embedding_model)
-        else:
-            # Ollama —  deepseek-r1:8b handles RAGAS structured prompts
-            # better than smaller models due to its larger context window.
-            from ragas.embeddings.litellm_provider import LiteLLMEmbeddings
-
-            base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-            model = os.getenv("EVAL_OLLAMA_MODEL", " deepseek-r1:8b")
-            embedding_model = os.getenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text")
-
-            client = AsyncOpenAI(base_url=f"{base_url}/v1", api_key="ollama")
-            llm = llm_factory(model, provider="openai", client=client)
-            embeddings = LiteLLMEmbeddings(
-                model=f"ollama/{embedding_model}",
-                api_base=base_url,
-            )
-
-        _metrics = {
-            "faithfulness": Faithfulness(llm=llm),
-            "answer_relevancy": AnswerRelevancy(llm=llm, embeddings=embeddings),
-            "context_precision": ContextPrecision(llm=llm),
-            "context_recall": ContextRecall(llm=llm),
-        }
-    return _metrics
-
-
-def _run_async(coro) -> float:
-    """Execute an async RAGAS coroutine synchronously."""
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            # Notebook / async context — nest_asyncio must be installed
-            import nest_asyncio  # type: ignore[import]
-            nest_asyncio.apply()
-            return loop.run_until_complete(coro)
-    except RuntimeError:
-        pass
-    return asyncio.run(coro)
-
-
-# ---------------------------------------------------------------------------
-# Pipeline target function
-# ---------------------------------------------------------------------------
-
-def run_pipeline(inputs: dict) -> dict:
-    """Invoke the Ariadne graph and return RAGAS-compatible output fields.
-
-    This function is passed as the target to ``langsmith.evaluate()``.
-    Each call is automatically traced in LangSmith when tracing is enabled.
-    """
-    logs: str = inputs["logs"]
-    mode: str = inputs.get("mode", "detailed")
-
-    state = run_graph(logs, mode)
-
-    final_output = state.final_output
-    root_cause: str = final_output.root_cause if final_output else ""
-
-    return {
-        "user_input": logs,
-        "retrieved_contexts": list(state.context or []),
-        "response": root_cause,
-    }
-
-
-# ---------------------------------------------------------------------------
-# Evaluators — one per RAGAS metric, using the LangSmith evaluator interface
-# ---------------------------------------------------------------------------
-
-def eval_faithfulness(run: Run, example: Example) -> dict:
-    """Score: is the response grounded in the retrieved context?"""
-    outputs = run.outputs or {}
-    result = _run_async(_get_metrics()["faithfulness"].ascore(
-        user_input=outputs.get("user_input", ""),
-        response=outputs.get("response", ""),
-        retrieved_contexts=outputs.get("retrieved_contexts") or [],
-    ))
-    return {"key": "faithfulness", "score": result.value}
-
-
-def eval_answer_relevancy(run: Run, example: Example) -> dict:
-    """Score: does the response address the incident logs?"""
-    outputs = run.outputs or {}
-    result = _run_async(_get_metrics()["answer_relevancy"].ascore(
-        user_input=outputs.get("user_input", ""),
-        response=outputs.get("response", ""),
-    ))
-    return {"key": "answer_relevancy", "score": result.value}
-
-
-def eval_context_precision(run: Run, example: Example) -> dict:
-    """Score: is relevant context ranked higher in the retrieved set?"""
-    outputs = run.outputs or {}
-    reference = (example.outputs or {}).get("reference", "")
-    if not reference:
-        return {"key": "context_precision", "score": None}
-    result = _run_async(_get_metrics()["context_precision"].ascore(
-        user_input=outputs.get("user_input", ""),
-        reference=reference,
-        retrieved_contexts=outputs.get("retrieved_contexts") or [],
-    ))
-    return {"key": "context_precision", "score": result.value}
-
-
-def eval_context_recall(run: Run, example: Example) -> dict:
-    """Score: does retrieved context cover the reference answer?"""
-    outputs = run.outputs or {}
-    reference = (example.outputs or {}).get("reference", "")
-    if not reference:
-        return {"key": "context_recall", "score": None}
-    result = _run_async(_get_metrics()["context_recall"].ascore(
-        user_input=outputs.get("user_input", ""),
-        retrieved_contexts=outputs.get("retrieved_contexts") or [],
-        reference=reference,
-    ))
-    return {"key": "context_recall", "score": result.value}
 
 
 # ---------------------------------------------------------------------------
@@ -216,9 +75,16 @@ def run_ragas_eval(
 
     Results appear in LangSmith:
       Datasets & Experiments → <dataset_name> → Experiments tab
-    Each run shows all four metric scores per sample plus aggregate stats.
+    Each run shows all evaluator scores per sample plus aggregate stats.
     """
     client = langsmith.Client()
+
+    llm_provider = os.getenv("LLM_PROVIDER", "openai")
+    embedding_provider = os.getenv("EMBEDDING_PROVIDER", "ollama")
+
+    # Append provider to experiment prefix so each provider gets its own
+    # experiment in LangSmith (e.g. ragas_openai, ragas_ollama, ragas_gemini).
+    full_prefix = f"{experiment_prefix}_{llm_provider}"
 
     logger.info("Preparing dataset '%s'…", dataset_name)
     build_langsmith_dataset(client, dataset_name=dataset_name, num_samples=None, force_refresh=force_refresh)
@@ -230,7 +96,7 @@ def run_ragas_eval(
 
     logger.info(
         "Starting RAGAS evaluation experiment (prefix='%s', samples=%d)…",
-        experiment_prefix,
+        full_prefix,
         len(all_examples),
     )
 
@@ -242,19 +108,33 @@ def run_ragas_eval(
             eval_answer_relevancy,
             eval_context_precision,
             eval_context_recall,
+            eval_root_cause_quality,
+            eval_action_quality,
+            eval_final_score,
+            eval_prompt_tokens,
+            eval_completion_tokens,
+            eval_estimated_cost_gemini_flash,
+            eval_ai_diagnosis,
         ],
-        experiment_prefix=experiment_prefix,
+        experiment_prefix=full_prefix,
         max_concurrency=1,
         metadata={
-            "llm_provider": os.getenv("LLM_PROVIDER", "openai"),
+            "llm_provider": llm_provider,
+            "embedding_provider": embedding_provider,
             "eval_model": os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
-            "metrics": ["faithfulness", "answer_relevancy", "context_precision", "context_recall"],
+            "metrics": [
+                "faithfulness", "answer_relevancy", "context_precision", "context_recall",
+                "root_cause_quality", "action_quality", "final_score",
+                "prompt_tokens", "completion_tokens", "estimated_cost_gemini_flash_usd",
+                "ai_diagnosis",
+            ],
         },
     )
 
     print("\nEvaluation complete.")
     print(f"  Dataset    : {dataset_name}")
-    print(f"  Experiment : {experiment_prefix}")
+    print(f"  Experiment : {full_prefix}")
+    print(f"  Provider   : llm={llm_provider}, embedding={embedding_provider}")
     print(f"  LangSmith  : {results.experiment_name!r}")
     print("\nOpen LangSmith → Datasets & Experiments to view results.")
 
@@ -289,12 +169,27 @@ def _parse_args() -> argparse.Namespace:
         default=False,
         help="Delete and recreate the LangSmith dataset before evaluating (fixes missing/stale reference data)",
     )
+    parser.add_argument(
+        "--provider",
+        default=None,
+        help=(
+            "Set LLM_PROVIDER and EMBEDDING_PROVIDER for this run "
+            "(e.g. openai, ollama, gemini). Overrides env vars."
+        ),
+    )
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     args = _parse_args()
+
+    if args.provider:
+        os.environ["LLM_PROVIDER"] = args.provider
+        os.environ["EMBEDDING_PROVIDER"] = args.provider
+        from ariadne.core.config import reset_provider_caches
+        reset_provider_caches()
+
     run_ragas_eval(
         dataset_name=args.dataset,
         experiment_prefix=args.experiment_prefix,

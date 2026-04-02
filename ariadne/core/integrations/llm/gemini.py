@@ -4,7 +4,14 @@ import logging
 
 from google import genai
 from google.genai import types
-from langsmith import traceable
+try:
+    from langsmith import traceable
+except ImportError:  # pragma: no cover
+    def traceable(*args, **kwargs):  # type: ignore[misc]
+        """No-op fallback when langsmith is not installed."""
+        if len(args) == 1 and callable(args[0]) and not kwargs:
+            return args[0]
+        return lambda fn: fn
 
 from ariadne.core.integrations.llm.base import LLMClient, LLMResponse
 

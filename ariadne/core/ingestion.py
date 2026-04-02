@@ -12,6 +12,7 @@ from typing import Optional
 from tqdm import tqdm
 
 from ariadne.core.config import get_vector_store
+from ariadne.core.integrations.embeddings.cached import CachedEmbeddingClient
 from ariadne.core.retrieval.chunking import CHUNK_PRESETS, chunk_documents
 from ariadne.core.retrieval.document import IngestionDocument
 from ariadne.core.retrieval.pipeline_report import (
@@ -24,13 +25,6 @@ from ariadne.core.retrieval.pipeline_report import (
 )
 from ariadne.core.retrieval.preprocessing import PreprocessReport, preprocess_documents
 from ariadne.core.retrieval.vector_stores.qdrant_store import QdrantVectorStore
-from evals.retrieval_eval import (
-    EvalQuery,
-    EvalReport,
-    RetrievalEvaluator,
-    build_eval_set_from_titles,
-    load_curated_eval_set,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -222,6 +216,14 @@ class IngestionPipeline:
         post_index_count = self.vector_store.get_collection_stats().get("count", 0)
         partial_failure = upsert_error_count > 0
 
+        # --- Collect embedding cache stats (if Redis cache is active) ---
+        cache_hits = 0
+        cache_misses = 0
+        embedding_client = self.vector_store.embedding_client
+        if isinstance(embedding_client, CachedEmbeddingClient):
+            cache_hits = embedding_client.total_hits
+            cache_misses = embedding_client.total_misses
+
         # --- Fase 3: persist index_metrics.json ---
         index_metrics = {
             "embedding_model": current_model,
@@ -236,6 +238,8 @@ class IngestionPipeline:
             "duration_seconds": round(elapsed, 3),
             "embedding_batches_total": n_batches,
             "total_embedding_tokens_estimated": sum(doc.token_count for doc in chunks),
+            "embedding_cache_hits": cache_hits,
+            "embedding_cache_misses": cache_misses,
             "successfully_indexed_ids": successfully_indexed_ids,
         }
         self.index_metrics_path.parent.mkdir(parents=True, exist_ok=True)
@@ -258,7 +262,7 @@ class IngestionPipeline:
                 len(chunks) / elapsed if elapsed > 0 else 0,
             )
 
-    def evaluate(self, chunks: list[IngestionDocument]) -> EvalReport:
+    def evaluate(self, chunks: list[IngestionDocument]) -> "EvalReport":
         """Evaluate the retrieval system using curated queries or title-based fallback.
 
         .. deprecated::
@@ -267,8 +271,16 @@ class IngestionPipeline:
         """
         return self.run_retrieval_eval(chunks)
 
-    def run_retrieval_eval(self, chunks: list[IngestionDocument]) -> EvalReport:
+    def run_retrieval_eval(self, chunks: list[IngestionDocument]) -> "EvalReport":
         """Evaluate the retrieval system using curated queries or title-based fallback."""
+        from evals.retrieval_eval import (
+            EvalReport,
+            EvalQuery,
+            RetrievalEvaluator,
+            build_eval_set_from_titles,
+            load_curated_eval_set,
+        )
+
         if self.vector_store is None:
             self.vector_store = get_vector_store()
             if not isinstance(self.vector_store, QdrantVectorStore):

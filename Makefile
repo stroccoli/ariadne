@@ -31,6 +31,36 @@ ingest:
 	pip install -e ".[ingestion]" --quiet
 	dvc repro $(ARGS)
 
+# Index all three embedding providers into separate Qdrant collections.
+# Runs collect → preprocess → chunk once, then indexes for each provider.
+#   make ingest-all
+ingest-all:
+	pip install -e ".[ingestion]" --quiet
+	dvc repro collect preprocess chunk
+	python scripts/stages/index.py --provider openai
+	python scripts/stages/index.py --provider ollama
+	python scripts/stages/index.py --provider gemini
+
+# Incremental index: skip chunks whose content hasn't changed (by content_hash).
+# Saves embedding API quota when the corpus is mostly unchanged.
+#   make ingest-incremental
+ingest-incremental:
+	pip install -e ".[ingestion]" --quiet
+	dvc repro collect preprocess chunk
+	python scripts/stages/index.py --provider openai --incremental
+	python scripts/stages/index.py --provider ollama --incremental
+	python scripts/stages/index.py --provider gemini --incremental
+
+# Run evaluations for all three providers, producing separate LangSmith
+# experiments (e.g. ragas_openai, ragas_ollama, ragas_gemini).
+#   make eval-all
+#   make eval-all ARGS="--num-samples 5"
+eval-all:
+	pip install -e ".[evals]" --quiet
+	python evals/ragas_eval.py --provider openai $(ARGS)
+	python evals/ragas_eval.py --provider ollama $(ARGS)
+	python evals/ragas_eval.py --provider gemini $(ARGS)
+
 # ── Fly.io ─────────────────────────────────────────────────────────────────────
 #
 # Reads production-relevant variables from your local .env and pushes them

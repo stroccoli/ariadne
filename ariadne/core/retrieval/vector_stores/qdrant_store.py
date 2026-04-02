@@ -34,6 +34,8 @@ INDEXED_PAYLOAD_FIELDS = [
     ("source", PayloadSchemaType.KEYWORD),
     ("severity", PayloadSchemaType.KEYWORD),
     ("service", PayloadSchemaType.KEYWORD),
+    ("embedding_model", PayloadSchemaType.KEYWORD),
+    ("content_hash", PayloadSchemaType.KEYWORD),
 ]
 
 
@@ -187,7 +189,13 @@ class QdrantVectorStore(VectorStore):
         return str(uuid.uuid5(uuid.NAMESPACE_URL, f"{self.collection_name}:{doc.id}"))
 
     def filter_new_docs(self, docs: list[IngestionDocument]) -> list[IngestionDocument]:
-        """Return only docs not already present in the collection."""
+        """Return docs that are new or have changed content since last index.
+
+        Compares the ``content_hash`` stored in Qdrant against each incoming
+        document.  A document is returned (needs indexing) when:
+        - Its point ID does not exist in the collection, OR
+        - The stored ``content_hash`` is missing or differs from the incoming one.
+        """
         if not docs:
             return []
 
@@ -197,7 +205,8 @@ class QdrantVectorStore(VectorStore):
         id_to_doc = {self._doc_point_id(doc): doc for doc in docs}
         all_ids = list(id_to_doc.keys())
 
-        existing_ids: set[str] = set()
+        # Map point_id -> stored content_hash (None means point doesn't exist)
+        existing_hashes: dict[str, str | None] = {}
         batch_size = 100
         for i in range(0, len(all_ids), batch_size):
             batch_ids = all_ids[i : i + batch_size]
@@ -205,15 +214,36 @@ class QdrantVectorStore(VectorStore):
                 results = self.client.retrieve(
                     collection_name=self.collection_name,
                     ids=batch_ids,
-                    with_payload=False,
+                    with_payload=["content_hash"],
                     with_vectors=False,
                 )
-                existing_ids.update(str(r.id) for r in results)
+                for r in results:
+                    stored_hash = (r.payload or {}).get("content_hash")
+                    existing_hashes[str(r.id)] = stored_hash
             except Exception as exc:
                 logger.warning("Failed to check existing docs (batch %d): %s", i // batch_size, exc)
 
-        new_docs = [doc for pid, doc in id_to_doc.items() if pid not in existing_ids]
-        return new_docs
+        need_index: list[IngestionDocument] = []
+        n_new = 0
+        n_updated = 0
+        n_skipped = 0
+        for pid, doc in id_to_doc.items():
+            if pid not in existing_hashes:
+                need_index.append(doc)
+                n_new += 1
+            else:
+                stored = existing_hashes[pid]
+                if not stored or stored != doc.content_hash:
+                    need_index.append(doc)
+                    n_updated += 1
+                else:
+                    n_skipped += 1
+
+        logger.info(
+            "filter_new_docs: %d new, %d updated, %d unchanged (skipped)",
+            n_new, n_updated, n_skipped,
+        )
+        return need_index
 
     # ------------------------------------------------------------------
     # Fase 4: collection introspection helpers

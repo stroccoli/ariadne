@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import logging
 
-import requests
+try:
+    import requests
+    _REQUESTS_AVAILABLE = True
+except ImportError:  # pragma: no cover
+    requests = None  # type: ignore[assignment]
+    _REQUESTS_AVAILABLE = False
 
 from ariadne.core.integrations.embeddings.base import EmbeddingClient
 
@@ -22,18 +27,30 @@ class OllamaEmbeddingClient(EmbeddingClient):
         base_url: str = "http://localhost:11434",
         timeout: int = 60,
         batch_size: int = DEFAULT_BATCH_SIZE,
+        keep_alive: str | None = None,
     ) -> None:
         self.model = model
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self.batch_size = batch_size
+        # keep_alive controls how long Ollama holds the embedding model in memory.
+        # Defaults to Ollama server setting (typically 5m) when None.
+        self.keep_alive = keep_alive
+        if not _REQUESTS_AVAILABLE:
+            raise RuntimeError(
+                "requests package is required for EMBEDDING_PROVIDER=ollama. "
+                "Install with: pip install 'ariadne[ollama]'"
+            )
         self.session = requests.Session()
 
     def embed_text(self, text: str) -> list[float]:
         logger.debug("Generating Ollama embedding with model '%s'", self.model)
+        payload: dict = {"model": self.model, "prompt": text}
+        if self.keep_alive is not None:
+            payload["keep_alive"] = self.keep_alive
         response = self.session.post(
             f"{self.base_url}{_EMBED_SINGLE_ENDPOINT}",
-            json={"model": self.model, "prompt": text},
+            json=payload,
             timeout=self.timeout,
         )
         response.raise_for_status()
@@ -47,9 +64,12 @@ class OllamaEmbeddingClient(EmbeddingClient):
         if not texts:
             return []
 
+        payload: dict = {"model": self.model, "input": texts}
+        if self.keep_alive is not None:
+            payload["keep_alive"] = self.keep_alive
         response = self.session.post(
             f"{self.base_url}{_EMBED_BATCH_ENDPOINT}",
-            json={"model": self.model, "input": texts},
+            json=payload,
             timeout=self.timeout,
         )
         response.raise_for_status()

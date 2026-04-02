@@ -5,16 +5,12 @@ description = "AI-powered incident log analyzer"
 requires-python = ">=3.11"
 dependencies = [
     # ── Production (API server) ───────────────────────────────────────
-    "aiofiles>=23.0.0",
     "fastapi>=0.115.0",
     "google-genai>=1.0.0",
     "langgraph>=0.2.0",
-    "langsmith>=0.1.0",
-    "openai>=1.30.0",
     "pydantic>=2.7.0",
     "python-dotenv>=1.0.1",
     "qdrant-client>=1.9.1",
-    "requests>=2.31.0",
     "sentry-sdk[fastapi]>=2.0.0",
     "slowapi>=0.1.9",
     "tenacity>=8.2.0",
@@ -37,7 +33,22 @@ ingestion = [
     "PyYAML>=6.0",
     "tqdm>=4.66.0",
 ]
-
+openai = [
+    # ── OpenAI LLM + embedding provider ────────────────────────────────
+    "openai>=1.30.0",
+]
+ollama = [
+    # ── Ollama LLM + embedding provider (local) ──────────────────────
+    "requests>=2.31.0",
+]
+cache = [
+    # ── Redis-backed distributed embedding cache ──────────────────────
+    "redis>=5.0.0",
+]
+observability = [
+    # ── LangSmith tracing ──────────────────────────────────────────
+    "langsmith>=0.1.0",
+]
 [build-system]
 requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"

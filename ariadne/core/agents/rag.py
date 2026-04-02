@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 
-from ariadne.core.config import get_vector_store
+from ariadne.core.config import get_embedding_provider_name, get_qdrant_collection_name, get_vector_store
 from ariadne.core.retrieval.vector_stores import VectorStoreUnavailableError
 from ariadne.core.state import IncidentState
 
@@ -59,7 +59,12 @@ def run_retrieval(state: IncidentState) -> IncidentState:
     """Run retrieval on the given state and return the updated state."""
     query = _build_search_query(state)
     attempt = state.retrieval_attempts + 1
-    logger.info("[retrieve] running retrieval attempt=%d", attempt)
+    logger.info(
+        "[retrieve] running retrieval attempt=%d collection=%s provider=%s",
+        attempt,
+        get_qdrant_collection_name(),
+        get_embedding_provider_name(),
+    )
     if state.retrieval_attempts > 0:
         logger.debug("[retrieve] enriched query with incident_type=%s", state.incident_type)
 

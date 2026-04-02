@@ -14,13 +14,21 @@ from __future__ import annotations
 
 import logging
 
-from langsmith import traceable
+try:
+    from langsmith import traceable
+except ImportError:  # pragma: no cover
+    def traceable(*args, **kwargs):  # type: ignore[misc]
+        """No-op fallback when langsmith is not installed."""
+        if len(args) == 1 and callable(args[0]) and not kwargs:
+            return args[0]
+        return lambda fn: fn
 from pydantic import ValidationError
 
 from ariadne.core.config import get_llm_client
 from ariadne.core.integrations.llm.base import LLMResponse
 from ariadne.core.models import ALLOWED_PROMPT_MODES, AnalysisOutput
 from ariadne.core.state import IncidentState
+from ariadne.core.utils.logs import truncate_logs
 from ariadne.core.utils.output import parse_json_response
 
 
@@ -142,7 +150,7 @@ def _build_prompt(logs: str, context: str, mode: str) -> str:
         logger.warning("Unknown analysis mode '%s', defaulting to detailed", mode)
         prompt_template = DETAILED_PROMPT
 
-    return prompt_template.format(logs=logs, context=context)
+    return prompt_template.format(logs=truncate_logs(logs), context=context)
 
 
 def _fallback_response() -> AnalysisOutput:
