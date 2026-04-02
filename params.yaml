@@ -3,6 +3,11 @@ ingest:
   max_per_repo: 200
   chunk_preset: medium
   embedding_batch_size: 32
+  # Embedding providers to index. Used by `make ingest-all` and DVC stages.
+  providers:
+    - openai
+    - ollama
+    - gemini
   # Embedding model version guard: raise error if collection was built with
   # a different model. Set to false to skip the check (e.g. in CI/testing).
   embedding_model_check: true

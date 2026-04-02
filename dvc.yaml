@@ -39,8 +39,8 @@ stages:
     outs:
       - data/datasets/chunks_medium.json
 
-  index:
-    cmd: python scripts/stages/index.py
+  index_openai:
+    cmd: python scripts/stages/index.py --provider openai
     deps:
       - data/datasets/chunks_medium.json
       - ariadne/core/ingestion.py
@@ -50,7 +50,35 @@ stages:
       - ingest.embedding_batch_size
       - ingest.embedding_model_check
     outs:
-      - data/datasets/index_metrics.json:
+      - data/datasets/index_metrics_openai.json:
+          cache: false
+
+  index_ollama:
+    cmd: python scripts/stages/index.py --provider ollama
+    deps:
+      - data/datasets/chunks_medium.json
+      - ariadne/core/ingestion.py
+      - ariadne/core/retrieval/vector_stores/qdrant_store.py
+      - scripts/stages/index.py
+    params:
+      - ingest.embedding_batch_size
+      - ingest.embedding_model_check
+    outs:
+      - data/datasets/index_metrics_ollama.json:
+          cache: false
+
+  index_gemini:
+    cmd: python scripts/stages/index.py --provider gemini
+    deps:
+      - data/datasets/chunks_medium.json
+      - ariadne/core/ingestion.py
+      - ariadne/core/retrieval/vector_stores/qdrant_store.py
+      - scripts/stages/index.py
+    params:
+      - ingest.embedding_batch_size
+      - ingest.embedding_model_check
+    outs:
+      - data/datasets/index_metrics_gemini.json:
           cache: false
 
   evaluate:
@@ -58,7 +86,9 @@ stages:
     deps:
       - data/datasets/chunks_medium.json
       - data/datasets/preprocess_report.json
-      - data/datasets/index_metrics.json
+      - data/datasets/index_metrics_openai.json
+      - data/datasets/index_metrics_ollama.json
+      - data/datasets/index_metrics_gemini.json
       - ariadne/core/ingestion.py
       - ariadne/core/retrieval/pipeline_report.py
       - ariadne/core/retrieval/vector_stores/qdrant_store.py

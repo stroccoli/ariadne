@@ -49,6 +49,7 @@ class LangSmithConfigTests(unittest.TestCase):
 
 
 class OpenAIClientTests(unittest.TestCase):
+    @patch("ariadne.core.integrations.llm.openai_provider._OPENAI_AVAILABLE", True)
     @patch("ariadne.core.integrations.llm.openai_provider.OpenAI")
     def test_generate_returns_usage_metadata(self, mock_openai) -> None:
         fake_response = SimpleNamespace(

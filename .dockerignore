@@ -22,11 +22,17 @@
 **/build
 **/*.egg-info
 
-# ── Eval results (local benchmark artifacts, not source) ──────────────
-**/evals/results
+# ── Offline pipeline / dev-only directories ─────────────────────────
+# Not needed at runtime — API retrieves from remote Qdrant
+data/
+tests/
+evals/
+scripts/
+docs/
 
-# ── Local Qdrant storage volume ───────────────────────────────────────
+# ── Local Qdrant + Redis storage volumes ─────────────────────────────
 **/.qdrant
+**/.redis
 
 # ── IDE / editor config ──────────────────────────────────────────────
 **/.vscode

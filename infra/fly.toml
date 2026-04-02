@@ -16,7 +16,7 @@ primary_region = 'iad'
   internal_port = 8080
   force_https = true
   auto_stop_machines = 'stop'
-  auto_start_machines = false
+  auto_start_machines = true
   min_machines_running = 0
 
   [http_service.concurrency]
@@ -27,7 +27,7 @@ primary_region = 'iad'
   [[http_service.checks]]
     interval = '30s'
     timeout = '5s'
-    grace_period = '10s'
+    grace_period = '15s'
     method = 'GET'
     path = '/health'
 

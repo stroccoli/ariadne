@@ -1,6 +1,66 @@
 APP     ?= ariadne-api
 FLYCTL  := $(shell command -v flyctl 2>/dev/null || command -v fly 2>/dev/null)
 
+# ── Offline pipelines ──────────────────────────────────────────────────────────
+#
+# These targets install only their required extras (not shipped to production)
+# and run the corresponding offline script.
+#
+#   make eval                           # full evaluation (50 samples)
+#   make eval ARGS="--num-samples 5"    # quick smoke-test
+#   make ingest                         # full DVC ingestion pipeline
+#   make ingest ARGS="chunk index"      # run specific DVC stages
+
+ARGS ?=
+
+.PHONY: eval eval-setup ingest
+
+eval:
+	pip install -e ".[evals]" --quiet
+	python evals/ragas_eval.py $(ARGS)
+
+# Upload / refresh the LangSmith dataset then run the evaluation.
+# Adds --force-refresh so stale or missing reference fields are fixed first.
+#   make eval-setup                          # all 50 samples
+#   make eval-setup ARGS="--num-samples 5"   # quick smoke-test
+eval-setup:
+	pip install -e ".[evals]" --quiet
+	python evals/ragas_eval.py --force-refresh $(ARGS)
+
+ingest:
+	pip install -e ".[ingestion]" --quiet
+	dvc repro $(ARGS)
+
+# Index all three embedding providers into separate Qdrant collections.
+# Runs collect → preprocess → chunk once, then indexes for each provider.
+#   make ingest-all
+ingest-all:
+	pip install -e ".[ingestion]" --quiet
+	dvc repro collect preprocess chunk
+	python scripts/stages/index.py --provider openai
+	python scripts/stages/index.py --provider ollama
+	python scripts/stages/index.py --provider gemini
+
+# Incremental index: skip chunks whose content hasn't changed (by content_hash).
+# Saves embedding API quota when the corpus is mostly unchanged.
+#   make ingest-incremental
+ingest-incremental:
+	pip install -e ".[ingestion]" --quiet
+	dvc repro collect preprocess chunk
+	python scripts/stages/index.py --provider openai --incremental
+	python scripts/stages/index.py --provider ollama --incremental
+	python scripts/stages/index.py --provider gemini --incremental
+
+# Run evaluations for all three providers, producing separate LangSmith
+# experiments (e.g. ragas_openai, ragas_ollama, ragas_gemini).
+#   make eval-all
+#   make eval-all ARGS="--num-samples 5"
+eval-all:
+	pip install -e ".[evals]" --quiet
+	python evals/ragas_eval.py --provider openai $(ARGS)
+	python evals/ragas_eval.py --provider ollama $(ARGS)
+	python evals/ragas_eval.py --provider gemini $(ARGS)
+
 # ── Fly.io ─────────────────────────────────────────────────────────────────────
 #
 # Reads production-relevant variables from your local .env and pushes them

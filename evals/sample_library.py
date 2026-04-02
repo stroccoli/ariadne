@@ -1,9 +1,47 @@
 from __future__ import annotations
 
 import random as _random
+from dataclasses import dataclass
 
-from evals.benchmark_models import ActionRubric, IncidentSample, RootCauseRubric
-from evals.rubric_scoring import criterion
+
+# ---------------------------------------------------------------------------
+# Minimal data models (previously in benchmark_models / rubric_scoring)
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class ConceptCriterion:
+    label: str
+    keywords: tuple[str, ...]
+
+
+def criterion(label: str, *keywords: str) -> ConceptCriterion:
+    """Build a ConceptCriterion with normalised lowercase keywords."""
+    return ConceptCriterion(label=label, keywords=tuple(k.lower() for k in keywords))
+
+
+@dataclass(frozen=True)
+class RootCauseRubric:
+    required_concepts: tuple[ConceptCriterion, ...]
+    forbidden_terms: tuple[str, ...] = ()
+    require_uncertainty: bool = False
+
+
+@dataclass(frozen=True)
+class ActionRubric:
+    required_concepts: tuple[ConceptCriterion, ...]
+    minimum_actions: int = 1
+    discouraged_phrases: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class IncidentSample:
+    sample_id: str
+    description: str
+    logs: str
+    expected_incident_type: str
+    expectation_note: str
+    root_cause_rubric: RootCauseRubric
+    action_rubric: ActionRubric
 
 
 def get_sample_by_id(sample_id: str) -> IncidentSample:

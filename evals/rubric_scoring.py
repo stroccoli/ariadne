@@ -1,146 +1,89 @@
+"""Rubric-based scoring for Ariadne incident analysis evaluations.
+
+Provides deterministic, keyword-matching scores for root cause quality and
+action quality against the IncidentSample rubrics defined in sample_library.py.
+
+Scoring approach
+----------------
+Root cause quality (0.0–1.0):
+    85 % concept coverage   – fraction of required_concepts matched
+    15 % uncertainty credit – full credit if rubric requires uncertainty and
+                              the response mentions hedging language
+    -25 % per forbidden term found in the response
+
+Action quality (0.0–1.0):
+    75 % concept coverage   – fraction of required_concepts matched
+    25 % count score        – min(actual_count / minimum_actions, 1.0)
+    -15 % per discouraged phrase found in the actions text
+"""
 from __future__ import annotations
 
-import re
-from typing import Sequence
+from evals.sample_library import ActionRubric, RootCauseRubric
 
-from evals.benchmark_models import (
-    ActionQualityResult,
-    ConceptCriterion,
-    IncidentSample,
-    RootCauseQualityResult,
-)
+_UNCERTAINTY_KEYWORDS = ("may", "might", "could", "possibly", "potential", "likely", "unclear", "uncertain")
 
 
-UNCERTAINTY_TERMS = (
-    "uncertain",
-    "unclear",
-    "ambiguous",
-    "mixed evidence",
-    "conflicting",
-    "insufficient evidence",
-    "incomplete evidence",
-    "not enough evidence",
-    "cannot determine",
-    "unable to determine",
-)
-
-_NON_ALPHANUMERIC_PATTERN = re.compile(r"[^a-z0-9]+")
-_WHITESPACE_PATTERN = re.compile(r"\s+")
+def _text_matches_criterion_keywords(text_lower: str, keywords: tuple[str, ...]) -> bool:
+    return any(kw in text_lower for kw in keywords)
 
 
-def criterion(label: str, *keywords: str) -> ConceptCriterion:
-    return ConceptCriterion(label=label, keywords=tuple(_normalize_for_match(keyword) for keyword in keywords))
+def score_root_cause(response: str, rubric: RootCauseRubric) -> float:
+    """Return a 0.0–1.0 score for how well *response* satisfies *rubric*.
 
+    Args:
+        response: The model's root_cause string.
+        rubric:   The RootCauseRubric for this sample.
+    """
+    text = response.lower()
 
-def evaluate_root_cause_quality(sample: IncidentSample, root_cause: str) -> RootCauseQualityResult:
-    normalized_root_cause = _normalize_for_match(root_cause)
-    matched = tuple(
-        criterion_definition.label
-        for criterion_definition in sample.root_cause_rubric.required_concepts
-        if _criterion_is_matched(normalized_root_cause, criterion_definition)
+    # Concept coverage (0.0–1.0)
+    matched = sum(
+        1
+        for criterion in rubric.required_concepts
+        if _text_matches_criterion_keywords(text, criterion.keywords)
     )
-    missed = tuple(
-        criterion_definition.label
-        for criterion_definition in sample.root_cause_rubric.required_concepts
-        if criterion_definition.label not in matched
-    )
-    forbidden_hits = tuple(
-        term
-        for term in sample.root_cause_rubric.forbidden_terms
-        if _normalize_for_match(term) in normalized_root_cause
-    )
-    uncertainty_satisfied = (
-        True
-        if not sample.root_cause_rubric.require_uncertainty
-        else any(_normalize_for_match(term) in normalized_root_cause for term in UNCERTAINTY_TERMS)
+    total = len(rubric.required_concepts) or 1
+    coverage = matched / total
+
+    # Uncertainty satisfaction (0.0–1.0)
+    uncertainty_score = 0.0
+    if rubric.require_uncertainty:
+        uncertainty_score = 1.0 if any(kw in text for kw in _UNCERTAINTY_KEYWORDS) else 0.0
+
+    # Forbidden term penalty
+    forbidden_penalty = sum(
+        0.25 for term in rubric.forbidden_terms if term.lower() in text
     )
 
-    concept_total = len(sample.root_cause_rubric.required_concepts)
-    coverage_score = len(matched) / concept_total if concept_total else 1.0
-    uncertainty_score = 1.0 if uncertainty_satisfied else 0.0
-    forbidden_penalty = 0.25 if forbidden_hits else 0.0
-    score = max(0.0, min(1.0, (0.85 * coverage_score) + (0.15 * uncertainty_score) - forbidden_penalty))
+    raw = 0.85 * coverage + 0.15 * uncertainty_score - forbidden_penalty
+    return max(0.0, min(1.0, raw))
 
-    return RootCauseQualityResult(
-        score=round(score, 2),
-        matched_concepts=matched,
-        missed_concepts=missed,
-        forbidden_hits=forbidden_hits,
-        uncertainty_satisfied=uncertainty_satisfied,
+
+def score_action(actions: list[str], rubric: ActionRubric) -> float:
+    """Return a 0.0–1.0 score for how well *actions* satisfies *rubric*.
+
+    Args:
+        actions: The model's recommended_actions list.
+        rubric:  The ActionRubric for this sample.
+    """
+    combined = " ".join(actions).lower()
+
+    # Concept coverage (0.0–1.0)
+    matched = sum(
+        1
+        for criterion in rubric.required_concepts
+        if _text_matches_criterion_keywords(combined, criterion.keywords)
+    )
+    total = len(rubric.required_concepts) or 1
+    coverage = matched / total
+
+    # Count score (0.0–1.0)
+    count_score = min(1.0, len(actions) / max(rubric.minimum_actions, 1))
+
+    # Discouraged phrase penalty
+    discouraged_penalty = sum(
+        0.15 for phrase in rubric.discouraged_phrases if phrase.lower() in combined
     )
 
-
-def evaluate_action_quality(sample: IncidentSample, actions: Sequence[str]) -> ActionQualityResult:
-    normalized_actions = tuple(_normalize_for_match(action) for action in actions if _normalize_for_match(action))
-    combined_text = " ".join(normalized_actions)
-    matched = tuple(
-        criterion_definition.label
-        for criterion_definition in sample.action_rubric.required_concepts
-        if _criterion_is_matched(combined_text, criterion_definition)
-    )
-    missed = tuple(
-        criterion_definition.label
-        for criterion_definition in sample.action_rubric.required_concepts
-        if criterion_definition.label not in matched
-    )
-    discouraged_hits = tuple(
-        phrase
-        for phrase in sample.action_rubric.discouraged_phrases
-        if _normalize_for_match(phrase) in combined_text
-    )
-    action_count = len(normalized_actions)
-    minimum_actions_met = action_count >= sample.action_rubric.minimum_actions
-
-    concept_total = len(sample.action_rubric.required_concepts)
-    coverage_score = len(matched) / concept_total if concept_total else 1.0
-    count_score = min(action_count / sample.action_rubric.minimum_actions, 1.0) if sample.action_rubric.minimum_actions else 1.0
-    discouraged_penalty = 0.15 * min(1.0, len(discouraged_hits) / max(action_count, 1))
-    score = max(0.0, min(1.0, (0.75 * coverage_score) + (0.25 * count_score) - discouraged_penalty))
-
-    return ActionQualityResult(
-        score=round(score, 2),
-        matched_concepts=matched,
-        missed_concepts=missed,
-        discouraged_hits=discouraged_hits,
-        action_count=action_count,
-        minimum_actions_met=minimum_actions_met,
-    )
-
-
-def sample_rubric_to_dict(sample: IncidentSample) -> dict:
-    return {
-        "sample_id": sample.sample_id,
-        "description": sample.description,
-        "expected_incident_type": sample.expected_incident_type,
-        "expectation_note": sample.expectation_note,
-        "logs": sample.logs,
-        "root_cause_rubric": {
-            "required_concepts": [_criterion_to_dict(item) for item in sample.root_cause_rubric.required_concepts],
-            "forbidden_terms": list(sample.root_cause_rubric.forbidden_terms),
-            "require_uncertainty": sample.root_cause_rubric.require_uncertainty,
-        },
-        "action_rubric": {
-            "required_concepts": [_criterion_to_dict(item) for item in sample.action_rubric.required_concepts],
-            "minimum_actions": sample.action_rubric.minimum_actions,
-            "discouraged_phrases": list(sample.action_rubric.discouraged_phrases),
-        },
-    }
-
-
-def _criterion_is_matched(text: str, criterion_definition: ConceptCriterion) -> bool:
-    return any(
-        normalized_keyword and normalized_keyword in text
-        for normalized_keyword in (_normalize_for_match(keyword) for keyword in criterion_definition.keywords)
-    )
-
-
-def _criterion_to_dict(criterion_definition: ConceptCriterion) -> dict:
-    return {
-        "label": criterion_definition.label,
-        "keywords": list(criterion_definition.keywords),
-    }
-
-
-def _normalize_for_match(value: str) -> str:
-    normalized = _NON_ALPHANUMERIC_PATTERN.sub(" ", str(value).strip().lower())
-    return _WHITESPACE_PATTERN.sub(" ", normalized).strip()
+    raw = 0.75 * coverage + 0.25 * count_score - discouraged_penalty
+    return max(0.0, min(1.0, raw))

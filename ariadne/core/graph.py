@@ -9,7 +9,7 @@ from langgraph.graph import END, START, StateGraph
 from ariadne.core.agents.analyzer import run_analyzer
 from ariadne.core.agents.classifier import run_classifier
 from ariadne.core.agents.rag import run_retrieval
-from ariadne.core.config import get_langsmith_project, is_langsmith_enabled
+from ariadne.core.config import get_embedding_provider_name, get_langsmith_project, get_provider_name, is_langsmith_enabled
 from ariadne.core.models import ClassificationOutput, build_output
 from ariadne.core.state import IncidentState
 
@@ -125,14 +125,18 @@ def run_graph(logs: str, mode: str = "detailed") -> IncidentState:
 
     langsmith_config: dict = {}
     if is_langsmith_enabled():
+        llm_provider = get_provider_name()
+        embedding_provider = get_embedding_provider_name()
         langsmith_config = {
             "run_name": "incident_analysis",
             "metadata": {
                 "run_id": run_id,
                 "mode": mode,
                 "project": get_langsmith_project(),
+                "llm_provider": llm_provider,
+                "embedding_provider": embedding_provider,
             },
-            "tags": ["ariadne", mode],
+            "tags": ["ariadne", mode, f"llm:{llm_provider}", f"emb:{embedding_provider}"],
         }
 
     final_state = build_graph().invoke(state, config=langsmith_config if langsmith_config else None)

@@ -34,13 +34,12 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code and data
+# Copy application code
 COPY ariadne/ ariadne/
 COPY pyproject.toml .
-COPY data/ data/
 
-# Install the project itself (editable not needed in prod)
-RUN pip install --no-cache-dir -e .
+# Install the project itself (non-editable for production)
+RUN pip install --no-cache-dir .
 
 # Copy built UI static files from Stage 1 into the Python image.
 # FastAPI's StaticFiles mounts this at runtime — no Node.js needed at runtime.
