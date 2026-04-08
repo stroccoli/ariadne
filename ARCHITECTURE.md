@@ -28,7 +28,7 @@ Ariadne operates in two modes: an **offline indexing pipeline** that processes i
 
 ### 2.1 Offline Indexing Pipeline
 
-> **Batch process.** This pipeline runs offline and must complete before the system can serve any queries. It is orchestrated with **DVC** and triggered manually or on data updates — not on every user request.
+> **Batch process.** This pipeline runs offline and must complete before the system can serve any queries. It is orchestrated with **DVC** and triggered manually or on data updates.
 
 ```mermaid
 flowchart LR
@@ -48,6 +48,7 @@ flowchart LR
 
 | Stage | Strategy | Detail |
 |---|---|---|
+| Collect | Fetch data from external sources — GitHub Issues, internal postmortems — via dedicated scrapers | [→ details](#dvc-pipeline-stages) |
 | Preprocessing | Rule-based filtering (length, code ratio, age) + two-pass deduplication | [→ details](#preprocessing--cleaning) |
 | Chunking | RecursiveCharacterTextSplitter — 3 configurable size presets | [→ details](#chunking-strategy) |
 | Embedding | Pluggable provider via `EMBEDDING_PROVIDER` env var | [→ details](#embedding-models) |
@@ -92,15 +93,35 @@ flowchart LR
 
 ### 2.3 LangGraph Agent Flow
 
-The agent is a **stateful directed graph**. Each node performs a discrete reasoning step; the conditional edge after `analyze` enables automatic retry when LLM confidence is below threshold.
+Ariadne's reasoning is implemented as a **stateful directed graph** using LangGraph. All nodes share a single `IncidentState` object that accumulates results as the graph progresses. A conditional edge after `analyze` enables automatic self-correction via retry.
+
+#### Shared State
+
+Every node reads from and writes to `IncidentState`:
+
+| Field | Set by | Description |
+|---|---|---|
+| `logs` | User input | Raw incident logs submitted via the API |
+| `incident_type` | Classify | Incident category (e.g., `database`, `network`, `auth`) |
+| `classification_confidence` | Classify | Classifier certainty score (0.0 – 1.0) |
+| `context` | Retrieve | List of relevant documents fetched from Qdrant |
+| `retrieval_attempts` | Retrieve | Number of retrieval passes completed so far |
+| `analysis` | Analyze | Root-cause output: explanation, reasoning, remediation, confidence |
+| `final_output` | Build Output | Validated structured response returned to the API |
+| `node_timings` | All nodes | Execution time (seconds) per node for observability |
+| `total_prompt_tokens` | LLM nodes | Cumulative LLM input tokens across all calls |
+
+---
+
+#### Graph Topology
 
 ```mermaid
 flowchart LR
-    START([▶ START]) --> classify[🏷️ Classify<br/>Detect incident type<br/>& severity]
-    classify --> retrieve[🔍 Retrieve<br/>Hybrid vector + keyword<br/>search in Qdrant]
-    retrieve --> analyze[🧠 Analyze<br/>LLM synthesizes context<br/>into root-cause diagnosis]
-    analyze --> check{Confidence ≥ 0.7?<br/>or max retries reached?}
-    check -->|✅ Yes — done| build[📋 Build Output<br/>Format structured response]
+    START([▶ START]) --> classify[🏷️ Classify<br/>LLM Agent]
+    classify --> retrieve[🔍 Retrieve<br/>Tool Node]
+    retrieve --> analyze[🧠 Analyze<br/>LLM Agent]
+    analyze --> check{Confidence ≥ 0.7?<br/>or max retries?}
+    check -->|✅ Yes| build[📋 Build Output<br/>Utility Node]
     check -->|🔄 No — retry| retrieve
     build --> END([⏹ END])
 
@@ -113,7 +134,15 @@ flowchart LR
     style END fill:#2E7D32,stroke:#2E7D32,color:#fff
 ```
 
-> **Retry logic:** if the LLM's confidence score is below `0.7` and fewer than 2 retrieval attempts have been made, the graph loops back to `retrieve` with the same query — allowing the agent to self-correct before producing its final answer.
+| Node | Type | What it does | Detail |
+|---|---|---|---|
+| **Classify** | LLM Agent | Reads raw logs, infers incident type and severity | [→ Section 3.1](#31-classifier) |
+| **Retrieve** | Tool Node | Hybrid vector + keyword search against Qdrant | [→ details](#retrieval-strategy) |
+| **Analyze** | LLM Agent | Synthesizes retrieved context into a root-cause diagnosis with a confidence score | [→ Section 3.2](#32-analyzer) |
+| **Build Output** | Utility Node | Assembles the structured final response from classification + analysis | — |
+| **should_retry** | Conditional Edge | Routes to `retrieve` if confidence < 0.7 and attempts < 2; otherwise to `build_output` | — |
+
+> **Retry logic:** if the LLM's confidence score is below `0.7` and fewer than 2 retrieval attempts have been made, the graph loops back to `retrieve` — allowing the agent to self-correct before producing its final answer.
 
 ---
 
@@ -131,43 +160,124 @@ flowchart LR
 
 ---
 
-## 3. Agentes
+## 3. Agents
 
-### Agente Principal: [nombre]
-- **Responsabilidad**: 
-- **Herramientas disponibles**: 
-- **Estrategia de prompting**: 
-- **Flujo de decisión**: 
-
-### [Otros agentes si aplica]
+In Ariadne, "agents" are the **LLM-powered nodes** inside the LangGraph graph. Each one performs a single, focused reasoning step and writes structured output back to the shared state. The `retrieve` step is intentionally **not** LLM-powered — it is a deterministic hybrid search function.
 
 ---
 
-## 4. Pipeline RAG (Retrieval-Augmented Generation)
+### 3.1 Classifier
 
-- **Fuente de datos**: 
-- **Chunking strategy**: 
-- **Modelo de embeddings**: 
-- **Vector Store**: 
-- **Estrategia de retrieval**: 
+The first reasoning step. Reads raw incident logs and determines what kind of incident is being reported.
 
----
-
-## 5. Evaluación
-
-- **Framework de evaluación**: 
-- **Métricas clave**: 
-- **Dataset de evaluación**: 
-- **Resultados baseline**: 
+| Property | Value |
+|---|---|
+| **Input** | Raw incident logs (`state.logs`) |
+| **Output** | `incident_type`, `classification_confidence` |
+| **Prompting strategy** | Zero-shot classification — given a fixed list of incident categories, the model picks the best match and returns a confidence score (0.0 – 1.0) |
+| **Purpose** | Focus downstream retrieval on the right class of documents; avoid retrieving irrelevant knowledge |
 
 ---
 
-## 6. Monitoreo
+### 3.2 Analyzer
 
-- **Health check**: `GET /health`
-- **Ready check**: `GET /ready`
-- **Logging**: 
-- **Alertas**: 
+The core reasoning step. Receives retrieved documents and synthesizes them into a structured diagnosis.
+
+| Property | Value |
+|---|---|
+| **Input** | Raw logs + retrieved context documents (`state.context`) |
+| **Output** | `AnalysisOutput` — root cause, reasoning, remediation steps, confidence score |
+| **Prompting strategy** | Grounded reasoning — the model derives its answer strictly from the provided context, explains its reasoning step by step, suggests actionable remediation, and returns a confidence score. If context is insufficient, it must acknowledge this explicitly. |
+| **Purpose** | Produce trustworthy, grounded root-cause diagnoses; the confidence score drives the retry gate |
+
+---
+
+## 4. RAG Pipeline
+
+RAG (Retrieval-Augmented Generation) is the technique that grounds Ariadne's answers in real incident history rather than unconstrained LLM generation. It connects the two pipelines described in Section 2.
+
+```
+[Offline]  Collect → Preprocess → Chunk → Embed → Qdrant
+                                                      │
+[Online]   User → Classify → Retrieve ───────────────┘
+                              │
+                           Analyze → Response
+```
+
+### Data Sources
+
+| Source | Content | Collection method |
+|---|---|---|
+| **Postmortems** | Internal incident reports with root cause and timeline | DVC `collect` stage |
+| **GitHub Issues** | External bug reports and operational incidents | GitHub API via DVC |
+
+### Key Design Choices
+
+- **Classify before retrieve:** incident type and severity are extracted first, focusing retrieval on the right class of documents rather than doing a generic search
+- **Hybrid retrieval over pure vector search:** combines semantic similarity (cosine) with lexical overlap (keyword tokens) to handle cases where exact terms matter
+- **Rich payload per vector:** each document carries full metadata (source, severity, service, tags) so the LLM can reason about context provenance
+- **Incremental indexing:** new documents are upserted without requiring a full corpus reindex
+
+For full implementation details see [Appendix A — Implementation Reference](#a-implementation-reference).
+
+---
+
+## 5. Evaluation
+
+Ariadne uses **RAGAS** as its offline evaluation framework to measure RAG quality across a representative set of queries.
+
+### Metrics
+
+| Metric | What it measures |
+|---|---|
+| **Answer Relevancy** | How well the generated answer addresses the question |
+| **Faithfulness** | Whether the answer is grounded in the retrieved context (no hallucination) |
+| **Context Recall** | How much of the ground-truth answer is covered by the retrieved documents |
+| **Context Precision** | What fraction of retrieved documents are actually relevant to the query |
+
+### Evaluation Dataset
+
+- **Location:** `data/eval_queries.json`
+- **Format:** list of `{ question, ground_truth }` pairs covering representative incident scenarios across different types and severities
+
+### Results & A/B Testing
+
+Evaluation runs are stored in `evals/results/` as timestamped JSON files (e.g., `ab_test_20260325T...Z.json`). The latest run is always available at `evals/results/latest.json`. A/B testing across different LLM and embedding provider combinations is supported — each run records the provider configuration used.
+
+---
+
+## 6. Observability
+
+### Request Tracing — LangSmith
+
+When `LANGSMITH_API_KEY` is configured, every `run_graph()` call is automatically traced. Traces capture:
+
+- Full LLM prompt and completion at each node
+- Token counts (prompt + completion) per call and cumulative total
+- Per-node execution time (`node_timings`)
+- Run metadata: `run_id`, `mode`, `llm_provider`, `embedding_provider`
+- Tags: `ariadne`, `{mode}`, `llm:{provider}`, `emb:{provider}`
+
+This makes it easy to compare providers, debug retrieval quality, and inspect retry behavior directly in the LangSmith UI.
+
+### Health & Readiness Endpoints
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /health` | Liveness check — returns `200` if the process is running |
+| `GET /ready` | Readiness check — confirms the vector store and LLM provider are reachable |
+
+### Structured Logging
+
+Each node emits a structured log line with its key output fields, for example:
+
+```
+[classify] incident_type=database confidence=0.92 duration=1.23s
+[retrieve] attempt=1 docs=3 duration=0.45s
+[analyze] confidence=0.85 duration=3.12s
+```
+
+Logging is configured in `ariadne/core/logging_config.py` and works without LangSmith for local development.
 
 ---
 
@@ -177,27 +287,27 @@ flowchart LR
 push/PR → [test] → (solo main) → [deploy-backend] → [smoke-test]
 ```
 
-1. **test**: Corre `pytest tests/unit` con `VECTOR_STORE=none` (sin dependencias externas)
-2. **deploy-backend**: `flyctl deploy` desde `infra/fly.toml`
-3. **smoke-test**: Verifica `/health` y `/ready` post-deploy
+1. **test**: Runs `pytest tests/unit` with `VECTOR_STORE=none` (no external dependencies required)
+2. **deploy-backend**: `flyctl deploy` from `infra/fly.toml`
+3. **smoke-test**: Verifies `/health` and `/ready` endpoints after deploy
 
 ---
 
-## 8. Decisiones Arquitectónicas
+## 8. Architectural Decisions
 
-### ADR-001: [Título de la decisión]
-- **Contexto**: 
-- **Decisión**: 
-- **Consecuencias**: 
+### ADR-001: LangGraph for agent orchestration
+- **Context**: The system needs a flexible, debuggable way to orchestrate multi-step LLM reasoning with conditional logic and retry
+- **Decision**: LangGraph was chosen for its native support for stateful graphs, conditional edges, and built-in integration with LangSmith tracing
+- **Consequences**: Clean separation of reasoning steps; self-correction via retry; full execution traces available in LangSmith
 
-### ADR-002: VECTOR_STORE=none en tests unitarios
-- **Contexto**: Los tests unitarios no deben depender de servicios externos
-- **Decisión**: Se usa variable de entorno `VECTOR_STORE=none` para mockear el vector store
-- **Consecuencias**: Tests rápidos y confiables en CI
+### ADR-002: `VECTOR_STORE=none` in unit tests
+- **Context**: Unit tests must not depend on external services (Qdrant, LLM providers)
+- **Decision**: The `VECTOR_STORE=none` environment variable is used to mock the vector store during test runs
+- **Consequences**: Fast, reliable CI tests with no external dependencies
 
 ---
 
-## 9. Estructura del Proyecto
+## 9. Project Structure
 
 ```
 ariadne/
@@ -213,17 +323,17 @@ ariadne/
 
 ---
 
-## 10. Historia y Evolución
+## 10. History & Evolution
 
-### Semana 1 – [fecha]
+### Week 1
 - 
 
-### Semana 2 – [fecha]
+### Week 2
 - 
 
 ---
 
-## 11. Pendientes / Ideas Futuras
+## 11. Pending / Future Ideas
 
 - [ ] 
 - [ ] 
@@ -385,17 +495,4 @@ A **confidence-gated output** pattern ensures quality:
 | Retrieval returns 0 documents | Analyzer receives empty context; LLM signals low confidence |
 | Qdrant unavailable | Exception propagated to API layer; HTTP 503 returned |
 
----
-
-#### Observability & Evaluation
-
-**LangSmith** (online tracing):
-- Every `run_graph()` call is traced when `LANGSMITH_API_KEY` is set
-- Traces include LLM inputs/outputs, token counts, node timings, and provider metadata
-- Tags: `ariadne`, `{mode}`, `llm:{provider}`, `emb:{provider}`
-
-**RAGAS** (offline evaluation):
-- Evaluation dataset: `data/eval_queries.json`
-- Metrics: answer relevancy, faithfulness, context recall, context precision
-- Results stored in `evals/results/` with timestamped JSON files
-- A/B testing supported across provider configurations
+> For observability (LangSmith) and evaluation (RAGAS) details, see [Section 5 — Evaluation](#5-evaluation) and [Section 6 — Observability](#6-observability).
