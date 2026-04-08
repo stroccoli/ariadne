@@ -193,3 +193,31 @@ stages:
       hash: md5
       md5: f16e293b2074088feebb38d2bbb91791
       size: 1093
+  index_gemini:
+    cmd: python scripts/stages/index.py --provider gemini
+    deps:
+    - path: ariadne/core/ingestion.py
+      hash: md5
+      md5: dc515c4d8fa3436d70bc76c85a7273f2
+      size: 27957
+    - path: ariadne/core/retrieval/vector_stores/qdrant_store.py
+      hash: md5
+      md5: 5e22a77d0d4366cff0b003c5db0c12ae
+      size: 18894
+    - path: data/datasets/chunks_medium.json
+      hash: md5
+      md5: 704e1f6c16538e81f70104ee2a0cd0e8
+      size: 1857268
+    - path: scripts/stages/index.py
+      hash: md5
+      md5: 3a712f1fc47b62cd144976c5fbcd8c19
+      size: 3332
+    params:
+      params.yaml:
+        ingest.embedding_batch_size: 32
+        ingest.embedding_model_check: true
+    outs:
+    - path: data/datasets/index_metrics_gemini.json
+      hash: md5
+      md5: 4b7765b2509ec1a283dc753b45f3ccdd
+      size: 25832

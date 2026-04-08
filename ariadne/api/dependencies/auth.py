@@ -25,12 +25,19 @@ async def verify_api_key(x_api_key: str | None = Header(default=None)) -> None:
     """FastAPI dependency: enforce X-API-Key authentication on protected routes.
 
     Behaviour:
-    - API_KEY not set in env  → auth disabled (dev mode, warning logged at startup).
+    - API_KEY not set in env + ENVIRONMENT=production → 500 (fail-closed).
+    - API_KEY not set in env + other environment    → auth disabled (dev mode, warning logged).
     - Header missing          → 401 Unauthorized.
     - Header value wrong      → 401 Unauthorized (constant-time comparison).
     - Header value correct    → passes through (returns None).
     """
     if _API_KEY is None:
+        environment = os.getenv("ENVIRONMENT", "development").lower()
+        if environment == "production":
+            raise HTTPException(
+                status_code=500,
+                detail="API_KEY is not configured. Set API_KEY before deploying to production.",
+            )
         # Dev mode: key not configured, skip auth check
         return
 

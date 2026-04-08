@@ -94,7 +94,7 @@ export async function analyzeIncident(
         "Content-Type": "application/json",
         // X-API-Key is required by the backend on POST /analyze.
         // In development, set NEXT_PUBLIC_API_KEY in ui/.env.local.
-        // In production (Fly.io), it is baked in at Docker build time via --build-arg.
+        // In production (Fly.io), pass it via: fly deploy --build-arg NEXT_PUBLIC_API_KEY=<your-key>
         "X-API-Key": process.env.NEXT_PUBLIC_API_KEY ?? "",
       },
       body: JSON.stringify({ logs, mode } satisfies AnalyzeRequest),
