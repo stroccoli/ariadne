@@ -22,9 +22,9 @@ function getErrorContent(error: ApiError): {
   if (error.type === "server") {
     if (error.status === 503) {
       return {
-        title: "Service warming up",
+        title: "AI provider unavailable",
         message:
-          "Ariadne is starting up. This usually takes a few seconds.",
+          "The AI provider is experiencing high demand right now. Please wait a moment and try again.",
         showRetry: true,
       };
     }

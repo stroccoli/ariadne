@@ -25,7 +25,7 @@ except ImportError:  # pragma: no cover
 from pydantic import ValidationError
 
 from ariadne.core.config import get_llm_client
-from ariadne.core.integrations.llm.base import LLMResponse
+from ariadne.core.integrations.llm.base import LLMResponse, LLMUnavailableError
 from ariadne.core.models import ALLOWED_PROMPT_MODES, AnalysisOutput
 from ariadne.core.state import IncidentState
 from ariadne.core.utils.logs import truncate_logs
@@ -204,6 +204,8 @@ def analyze(logs: str, context: str, mode: str = "detailed") -> tuple[AnalysisOu
 
     try:
         llm_response: LLMResponse = get_llm_client().generate(prompt, json_output=True)
+    except LLMUnavailableError:
+        raise
     except Exception as error:
         logger.error("Analyzer LLM call failed: %s", error)
         return fallback, token_stats
