@@ -95,23 +95,6 @@ flowchart LR
 
 Ariadne's reasoning is implemented as a **stateful directed graph** using LangGraph. All nodes share a single `IncidentState` object that accumulates results as the graph progresses. A conditional edge after `analyze` enables automatic self-correction via retry.
 
-#### Shared State
-
-Every node reads from and writes to `IncidentState`:
-
-| Field | Set by | Description |
-|---|---|---|
-| `logs` | User input | Raw incident logs submitted via the API |
-| `incident_type` | Classify | Incident category (e.g., `database`, `network`, `auth`) |
-| `classification_confidence` | Classify | Classifier certainty score (0.0 – 1.0) |
-| `context` | Retrieve | List of relevant documents fetched from Qdrant |
-| `retrieval_attempts` | Retrieve | Number of retrieval passes completed so far |
-| `analysis` | Analyze | Root-cause output: explanation, reasoning, remediation, confidence |
-| `final_output` | Build Output | Validated structured response returned to the API |
-| `node_timings` | All nodes | Execution time (seconds) per node for observability |
-| `total_prompt_tokens` | LLM nodes | Cumulative LLM input tokens across all calls |
-
----
 
 #### Graph Topology
 
@@ -143,20 +126,6 @@ flowchart LR
 | **should_retry** | Conditional Edge | Routes to `retrieve` if confidence < 0.7 and attempts < 2; otherwise to `build_output` | — |
 
 > **Retry logic:** if the LLM's confidence score is below `0.7` and fewer than 2 retrieval attempts have been made, the graph loops back to `retrieve` — allowing the agent to self-correct before producing its final answer.
-
----
-
-### Key Components
-
-| Component | Role |
-|---|---|
-| **FastAPI** | REST layer — receives incident logs, returns structured JSON analysis |
-| **LangGraph Agent** | Orchestrates the `classify → retrieve → analyze` loop with retry |
-| **Classifier** | LLM call to identify incident type and severity from raw logs |
-| **Retriever** | Hybrid search (cosine × 0.65 + keyword overlap × 0.35) against Qdrant |
-| **Analyzer** | LLM call that synthesizes retrieved context into a root-cause explanation |
-| **Qdrant** | Vector store holding embedded postmortems and GitHub issues |
-| **LLM** | Ollama (local) / OpenAI / Gemini — swappable via `LLM_PROVIDER` env var |
 
 ---
 
@@ -281,7 +250,7 @@ Logging is configured in `ariadne/core/logging_config.py` and works without Lang
 
 ---
 
-## 7. CI/CD Pipeline
+## 7. CI/CD & Deployment
 
 ```
 push/PR → [test] → (solo main) → [deploy-backend] → [smoke-test]
@@ -290,6 +259,19 @@ push/PR → [test] → (solo main) → [deploy-backend] → [smoke-test]
 1. **test**: Runs `pytest tests/unit` with `VECTOR_STORE=none` (no external dependencies required)
 2. **deploy-backend**: `flyctl deploy` from `infra/fly.toml`
 3. **smoke-test**: Verifies `/health` and `/ready` endpoints after deploy
+
+### Deployment Target — Fly.io
+
+The backend is containerised via `infra/Dockerfile` and deployed to **Fly.io** as a single machine. Configuration lives in `infra/fly.toml`.
+
+| Setting | Value |
+|---|---|
+| Region | `iad` (US East) |
+| Runtime | Docker (Python 3.11) |
+| Health check | `GET /health` |
+| Secrets | `QDRANT_URL`, `LLM_PROVIDER`, `LANGSMITH_API_KEY` set via `fly secrets` |
+
+The Qdrant vector store runs as a separate service and is accessed over the network via `QDRANT_URL`. No stateful volumes are mounted on the app machine itself.
 
 ---
 
@@ -323,20 +305,26 @@ ariadne/
 
 ---
 
-## 10. History & Evolution
+## 10. Lessons Learned
 
-### Week 1
-- 
+During the development of the Ariadne project, an incident diagnosis system based on RAG and LLM agents, I gained practical knowledge in key tools for monitoring, evaluation, and data pipeline management. Below, I summarize my main learnings:
 
-### Week 2
-- 
+#### LangSmith
+- **Project Integration**: Learned to incorporate LangSmith into Python applications to track agent and LLM executions, configuring API keys and enabling automatic traces in LangGraph flows.
+- **Trace Analysis**: Developed skills to inspect detailed traces, including prompts, completions, execution times, and metadata, facilitating debugging of complex reasonings.
+- **Experiment Uploads**: Experimented with uploading and comparing experiments on the platform, tagging runs by providers (LLM/embedding) for comparative analysis.
+- **Metric Visualization**: Used dashboards to monitor token usage, latencies, and error patterns, improving production observability.
 
----
+#### RAGAS
+- **Basic Evaluation Metrics**: Implemented offline evaluations to measure RAG quality, including context recall, context precision, and answer relevancy, using synthetic datasets.
+- **Answer Relevancy and Faithfulness**: Integrated specific metrics like answer relevancy (response relevance) and faithfulness (context fidelity), ensuring generated responses are well-grounded.
+- **Natural Language Inference Models**: Explored the use of NLI models to evaluate response coherence and truthfulness, applying them in evaluation pipelines to detect hallucinations.
 
-## 11. Pending / Future Ideas
-
-- [ ] 
-- [ ] 
+#### DVC
+- **Pipeline Flow Definition**: Designed modular pipelines with stages (collect, preprocess, etc.), defining dependencies and parameters in YAML files to automate data processes.
+- **Dataset Versioning**: Learned to version datasets and models with DVC, tracking changes in Git repositories and facilitating experiment reproducibility.
+- **Stage Execution**: Executed individual or complete stages via CLI, handling incremental and forced re-runs to optimize processing times.
+- **CLI Workflow**: Mastered key commands like `dvc run`, `dvc repro`, and `dvc push/pull`, integrating them into CI/CD workflows for efficient deployments.
 
 ---
 
