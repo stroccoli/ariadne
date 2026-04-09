@@ -14,6 +14,7 @@ from ariadne.api.models.response import (
     TokenUsage,
 )
 from ariadne.core.graph import run_graph
+from ariadne.core.integrations.llm import LLMUnavailableError
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,15 @@ def analyze(request: Request, body: AnalyzeRequest) -> AnalyzeResponse:
     """
     try:
         state = run_graph(logs=body.logs, mode=body.mode)
+    except LLMUnavailableError as exc:
+        logger.warning("LLM provider unavailable (503): %s", exc)
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "The AI provider is currently experiencing high demand and is temporarily unavailable. "
+                "Please try again in a few moments."
+            ),
+        )
     except Exception as exc:
         logger.error("Pipeline failed", exc_info=False)
         import sentry_sdk

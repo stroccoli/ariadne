@@ -4,6 +4,7 @@ import logging
 
 from google import genai
 from google.genai import types
+from google.genai.errors import ServerError
 try:
     from langsmith import traceable
 except ImportError:  # pragma: no cover
@@ -13,7 +14,7 @@ except ImportError:  # pragma: no cover
             return args[0]
         return lambda fn: fn
 
-from ariadne.core.integrations.llm.base import LLMClient, LLMResponse
+from ariadne.core.integrations.llm.base import LLMClient, LLMResponse, LLMUnavailableError
 
 
 logger = logging.getLogger(__name__)
@@ -35,11 +36,19 @@ class GeminiClient(LLMClient):
             if json_output
             else None
         )
-        response = self._client.models.generate_content(
-            model=self.model_name,
-            contents=prompt,
-            config=config,
-        )
+        try:
+            response = self._client.models.generate_content(
+                model=self.model_name,
+                contents=prompt,
+                config=config,
+            )
+        except ServerError as exc:
+            if exc.code == 503:
+                raise LLMUnavailableError(
+                    "The AI provider is experiencing high demand and is temporarily unavailable. "
+                    "Please try again in a few moments."
+                ) from exc
+            raise
 
         text = response.text
 

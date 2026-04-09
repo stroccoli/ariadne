@@ -102,6 +102,7 @@ fly-secrets: _check-flyctl
 	  LLM_PROVIDER="$${LLM_PROVIDER}" \
 	  GEMINI_API_KEY="$${GEMINI_API_KEY}" \
 	  GEMINI_MODEL="$${GEMINI_MODEL:-gemini-2.5-flash}" \
+	  GEMINI_EMBEDDING_MODEL="$${GEMINI_EMBEDDING_MODEL:-models/gemini-embedding-001}" \
 	  EMBEDDING_PROVIDER="$${EMBEDDING_PROVIDER}" \
 	  VECTOR_STORE="$${VECTOR_STORE:-qdrant}" \
 	  QDRANT_URL="$${QDRANT_URL}" \
@@ -109,6 +110,9 @@ fly-secrets: _check-flyctl
 	  ALLOWED_ORIGINS="$${ALLOWED_ORIGINS:-https://ariadne.vercel.app}" \
 	  API_KEY="$${API_KEY}" \
 	  SENTRY_DSN="$${SENTRY_DSN}" \
+	  LANGCHAIN_TRACING_V2="$${LANGCHAIN_TRACING_V2}" \
+	  LANGCHAIN_API_KEY="$${LANGCHAIN_API_KEY}" \
+	  LANGCHAIN_PROJECT="$${LANGCHAIN_PROJECT:-ariadne}" \
 	  LOG_FORMAT="json" \
 	  -a $(APP)
 

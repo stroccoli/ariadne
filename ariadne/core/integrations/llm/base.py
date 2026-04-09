@@ -15,6 +15,10 @@ class LLMResponse:
     total_tokens: Optional[int] = None
 
 
+class LLMUnavailableError(Exception):
+    """Raised when the LLM provider is temporarily unavailable (e.g. 503)."""
+
+
 class LLMClient(ABC):
     @abstractmethod
     def generate(self, prompt: str, *, json_output: bool = False) -> LLMResponse:
