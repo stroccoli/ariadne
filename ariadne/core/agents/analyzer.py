@@ -150,7 +150,9 @@ def _build_prompt(logs: str, context: str, mode: str) -> str:
         logger.warning("Unknown analysis mode '%s', defaulting to detailed", mode)
         prompt_template = DETAILED_PROMPT
 
-    return prompt_template.format(logs=truncate_logs(logs), context=context)
+    safe_logs = truncate_logs(logs).replace("{", "{{").replace("}", "}}")
+    safe_context = context.replace("{", "{{").replace("}", "}}")
+    return prompt_template.format(logs=safe_logs, context=safe_context)
 
 
 def _fallback_response() -> AnalysisOutput:
@@ -168,9 +170,11 @@ def _repair_missing_confidence(
 ) -> tuple[float, dict]:
     """Return (confidence, token_stats) after a repair LLM call."""
     logger.warning("Analyzer response omitted confidence; requesting confidence repair")
+    safe_logs = truncate_logs(logs).replace("{", "{{").replace("}", "}}")
+    safe_context = context.replace("{", "{{").replace("}", "}}")
     prompt = CONFIDENCE_REPAIR_PROMPT.format(
-        logs=logs,
-        context=context,
+        logs=safe_logs,
+        context=safe_context,
         root_cause=parsed.get("root_cause", ""),
         recommended_actions=parsed.get("recommended_actions", []),
     )

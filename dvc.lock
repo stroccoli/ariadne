@@ -45,8 +45,8 @@ stages:
       size: 2696906
     - path: data/datasets/raw_postmortems.json
       hash: md5
-      md5: 136add76ef1b8ebe2b80ece05793df4d
-      size: 153726
+      md5: d5d4ddee9793972fe1cebbfe841da1b4
+      size: 1522951
   preprocess:
     cmd: python scripts/stages/preprocess.py
     deps:
@@ -60,8 +60,8 @@ stages:
       size: 1799
     - path: data/datasets/raw_postmortems.json
       hash: md5
-      md5: 136add76ef1b8ebe2b80ece05793df4d
-      size: 153726
+      md5: d5d4ddee9793972fe1cebbfe841da1b4
+      size: 1522951
     - path: scripts/stages/preprocess.py
       hash: md5
       md5: 89a37f1c13352803051a762b2b4a5b3a
@@ -73,12 +73,12 @@ stages:
     outs:
     - path: data/datasets/clean_docs.json
       hash: md5
-      md5: 3460a5daadfdbdf3040b62c5800debba
-      size: 1231804
+      md5: 58232e9282074b5ae8782d22d8bafa7f
+      size: 2585831
     - path: data/datasets/preprocess_report.json
       hash: md5
-      md5: c32879c6d684cee78994447351c6a302
-      size: 909
+      md5: 34318a1c6f09ff1c694be152883dbb08
+      size: 911
   chunk:
     cmd: python scripts/stages/chunk.py
     deps:
@@ -88,8 +88,8 @@ stages:
       size: 4567
     - path: data/datasets/clean_docs.json
       hash: md5
-      md5: 3460a5daadfdbdf3040b62c5800debba
-      size: 1231804
+      md5: 58232e9282074b5ae8782d22d8bafa7f
+      size: 2585831
     - path: scripts/stages/chunk.py
       hash: md5
       md5: 0d53d6ee06f37e28ce079eeb3c486e4f
@@ -100,8 +100,8 @@ stages:
     outs:
     - path: data/datasets/chunks_medium.json
       hash: md5
-      md5: 704e1f6c16538e81f70104ee2a0cd0e8
-      size: 1857268
+      md5: c8d23bba63c4d5f472d7fb8759907387
+      size: 5304091
   index:
     cmd: python scripts/stages/index.py
     deps:
@@ -135,24 +135,32 @@ stages:
     deps:
     - path: ariadne/core/ingestion.py
       hash: md5
-      md5: 762204c18234ecb78dfaa99a72734372
-      size: 27358
+      md5: dc515c4d8fa3436d70bc76c85a7273f2
+      size: 27957
     - path: ariadne/core/retrieval/pipeline_report.py
       hash: md5
       md5: 130fb7a4b1cc488f68a18dee0849a733
       size: 16916
     - path: ariadne/core/retrieval/vector_stores/qdrant_store.py
       hash: md5
-      md5: 98d1e5471583600e6317975ce51874d8
-      size: 17694
+      md5: 5e22a77d0d4366cff0b003c5db0c12ae
+      size: 18894
     - path: data/datasets/chunks_medium.json
       hash: md5
       md5: 704e1f6c16538e81f70104ee2a0cd0e8
       size: 1857268
-    - path: data/datasets/index_metrics.json
+    - path: data/datasets/index_metrics_gemini.json
       hash: md5
-      md5: 65b2a9e31e4bc7ad0cbe71f503e109f0
-      size: 85259
+      md5: 4b7765b2509ec1a283dc753b45f3ccdd
+      size: 25832
+    - path: data/datasets/index_metrics_ollama.json
+      hash: md5
+      md5: bd6da80e5c915064dfa8d75ea0f252a4
+      size: 483
+    - path: data/datasets/index_metrics_openai.json
+      hash: md5
+      md5: 5016114e142aa4c8b6ed4c061906b3e2
+      size: 67019
     - path: data/datasets/preprocess_report.json
       hash: md5
       md5: c32879c6d684cee78994447351c6a302
@@ -167,23 +175,23 @@ stages:
     outs:
     - path: data/datasets/pipeline_report.json
       hash: md5
-      md5: 30982e05682ac732144e83d83b709d56
-      size: 2594
+      md5: 9cd11463db07495663e309925a8645ca
+      size: 2599
   diagnose:
     cmd: python scripts/stages/diagnose.py
     deps:
     - path: ariadne/core/retrieval/pipeline_diagnosis.py
       hash: md5
-      md5: 2228ec55242b985cd17b89e3c54b6eb9
-      size: 11807
+      md5: c557961179f89c969ae08a841ab5d912
+      size: 17912
     - path: ariadne/core/retrieval/pipeline_report.py
       hash: md5
       md5: 130fb7a4b1cc488f68a18dee0849a733
       size: 16916
     - path: data/datasets/pipeline_report.json
       hash: md5
-      md5: 30982e05682ac732144e83d83b709d56
-      size: 2594
+      md5: 9cd11463db07495663e309925a8645ca
+      size: 2599
     - path: scripts/stages/diagnose.py
       hash: md5
       md5: 5eb72432f12b9b45af54b1efbcdc0b4f
@@ -191,5 +199,89 @@ stages:
     outs:
     - path: data/datasets/pipeline_diagnosis.json
       hash: md5
-      md5: f16e293b2074088feebb38d2bbb91791
-      size: 1093
+      md5: 5428a3e48a3bc2407998deb4e18e73bf
+      size: 1089
+  index_gemini:
+    cmd: python scripts/stages/index.py --provider gemini
+    deps:
+    - path: ariadne/core/ingestion.py
+      hash: md5
+      md5: dc515c4d8fa3436d70bc76c85a7273f2
+      size: 27957
+    - path: ariadne/core/retrieval/vector_stores/qdrant_store.py
+      hash: md5
+      md5: 5e22a77d0d4366cff0b003c5db0c12ae
+      size: 18894
+    - path: data/datasets/chunks_medium.json
+      hash: md5
+      md5: 704e1f6c16538e81f70104ee2a0cd0e8
+      size: 1857268
+    - path: scripts/stages/index.py
+      hash: md5
+      md5: 3a712f1fc47b62cd144976c5fbcd8c19
+      size: 3332
+    params:
+      params.yaml:
+        ingest.embedding_batch_size: 32
+        ingest.embedding_model_check: true
+    outs:
+    - path: data/datasets/index_metrics_gemini.json
+      hash: md5
+      md5: 4b7765b2509ec1a283dc753b45f3ccdd
+      size: 25832
+  index_ollama:
+    cmd: python scripts/stages/index.py --provider ollama
+    deps:
+    - path: ariadne/core/ingestion.py
+      hash: md5
+      md5: dc515c4d8fa3436d70bc76c85a7273f2
+      size: 27957
+    - path: ariadne/core/retrieval/vector_stores/qdrant_store.py
+      hash: md5
+      md5: 5e22a77d0d4366cff0b003c5db0c12ae
+      size: 18894
+    - path: data/datasets/chunks_medium.json
+      hash: md5
+      md5: 704e1f6c16538e81f70104ee2a0cd0e8
+      size: 1857268
+    - path: scripts/stages/index.py
+      hash: md5
+      md5: 3a712f1fc47b62cd144976c5fbcd8c19
+      size: 3332
+    params:
+      params.yaml:
+        ingest.embedding_batch_size: 32
+        ingest.embedding_model_check: true
+    outs:
+    - path: data/datasets/index_metrics_ollama.json
+      hash: md5
+      md5: bd6da80e5c915064dfa8d75ea0f252a4
+      size: 483
+  index_openai:
+    cmd: python scripts/stages/index.py --provider openai
+    deps:
+    - path: ariadne/core/ingestion.py
+      hash: md5
+      md5: dc515c4d8fa3436d70bc76c85a7273f2
+      size: 27957
+    - path: ariadne/core/retrieval/vector_stores/qdrant_store.py
+      hash: md5
+      md5: 5e22a77d0d4366cff0b003c5db0c12ae
+      size: 18894
+    - path: data/datasets/chunks_medium.json
+      hash: md5
+      md5: 704e1f6c16538e81f70104ee2a0cd0e8
+      size: 1857268
+    - path: scripts/stages/index.py
+      hash: md5
+      md5: 3a712f1fc47b62cd144976c5fbcd8c19
+      size: 3332
+    params:
+      params.yaml:
+        ingest.embedding_batch_size: 32
+        ingest.embedding_model_check: true
+    outs:
+    - path: data/datasets/index_metrics_openai.json
+      hash: md5
+      md5: 5016114e142aa4c8b6ed4c061906b3e2
+      size: 67019

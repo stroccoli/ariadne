@@ -181,7 +181,12 @@ def _maybe_wrap_with_cache(client: EmbeddingClient, model_name: str) -> Embeddin
         try:
             import redis
 
-            rc = redis.Redis.from_url(redis_url, decode_responses=False, socket_connect_timeout=3)
+            rc = redis.Redis.from_url(
+                redis_url,
+                decode_responses=False,
+                socket_connect_timeout=3,
+                socket_timeout=5,
+            )
             rc.ping()
             logger.info("Redis embedding cache enabled (ttl=%ds, model=%s)", ttl, model_name)
             return CachedEmbeddingClient(inner=client, redis_client=rc, model_name=model_name, ttl_seconds=ttl)

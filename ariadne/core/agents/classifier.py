@@ -98,7 +98,8 @@ def _build_prompt(logs: str, mode: str) -> str:
     logger.warning("Unknown classification mode '%s', defaulting to detailed", mode)
     prompt_template = DETAILED_PROMPT
 
-  return prompt_template.format(logs=truncate_logs(logs))
+  safe_logs = truncate_logs(logs).replace("{", "{{").replace("}", "}}")
+  return prompt_template.format(logs=safe_logs)
 
 
 def _fallback_response() -> ClassificationOutput:

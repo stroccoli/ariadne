@@ -33,8 +33,10 @@ def analyze(request: Request, body: AnalyzeRequest) -> AnalyzeResponse:
     """
     try:
         state = run_graph(logs=body.logs, mode=body.mode)
-    except Exception:
-        logger.exception("Pipeline failed")
+    except Exception as exc:
+        logger.error("Pipeline failed", exc_info=False)
+        import sentry_sdk
+        sentry_sdk.capture_exception(exc)
         raise HTTPException(status_code=500, detail="Analysis pipeline failed")
 
     if state.final_output is None:

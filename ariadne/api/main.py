@@ -29,7 +29,9 @@ def _get_allowed_origins() -> list[str]:
 
 
 def _sentry_before_send(event: dict, hint: dict) -> dict | None:
-    """Drop 4xx HTTP exceptions — only 5xx errors create Sentry events."""
+    """Drop 4xx HTTP exceptions — only 5xx errors create Sentry events.
+    Also strips the request body to avoid sending user incident logs to Sentry.
+    """
     exc_info = hint.get("exc_info")
     if exc_info:
         _, exc_value, _ = exc_info
@@ -37,6 +39,10 @@ def _sentry_before_send(event: dict, hint: dict) -> dict | None:
             return None
         if isinstance(exc_value, StarletteHTTPException) and exc_value.status_code < 500:
             return None
+    
+    if "request" in event:
+        event["request"].pop("data", None)
+        event["request"].pop("cookies", None)
     return event
 
 
@@ -91,7 +97,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=_get_allowed_origins(),
     allow_methods=["GET", "POST"],
-    allow_headers=["*"],
+    allow_headers=["Content-Type", "X-API-Key"],
+    allow_credentials=False,
+    expose_headers=["Retry-After"],
 )
 
 app.include_router(health_router)
